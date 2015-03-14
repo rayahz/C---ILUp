@@ -25,8 +25,8 @@
 /* *** PROCEDURES D'AFFICHAGE *** */
 ////////////////////////////////////
 // affichage d'une matrice
-
 void affichageMat(double**); 
+
 // affichage d'une matrice sous forme spy
 void affichageMatSpy(double**); 
 
@@ -42,6 +42,9 @@ double norme(double*);
 // permet d'effectuer le produit d'un vecteur transpose avec une matrice puis avec le vecteur (v' * a * v)
 double produitT(double*, double**); 
 
+// permet de calculer le produit scalaire d'un vecteur
+double prodScal(double *);
+
 //////////////////////////////////
 /* *** PROCEDURES DU PROJET *** */
 //////////////////////////////////
@@ -53,6 +56,9 @@ void ilup(double**, int**, double**);
 
 // permet d'effectuer la factorisation LU complete
 void LUfact(double**, double**);
+
+// permet d'effectuer le gradient conjugue 
+int CG(double **, double *, double *, double *);
 
 ///////////////////////////////////////
 /* *** PROCEDURES DE REMPLISSAGE *** */

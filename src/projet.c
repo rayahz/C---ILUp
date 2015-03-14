@@ -385,3 +385,71 @@ void matrixMarket(double **A, char *nom)
 	}
 	
 }*/
+
+/*
+  FONCTION : prodScal
+  DESCRIPTION : permet de calculer le produit scalaire d'un vecteur
+  IN : vecteur à calculer
+  OUT : /
+  RETOUR : scalaire contenant le resultat
+*/
+double prodScal(double *v)
+{
+	int i;
+	double resultat = 0.0;
+
+	for(i = 0; i < n; i++)
+		resultat += v[i] * v[i];
+
+	return resultat;
+}
+
+/*
+  FONCTION : CG
+  DESCRIPTION : permet d'effectuer le gradient conjugue à partir d'une matrice 
+  IN : matrice initiale, vecteur resultat, vecteur recherche et vecteur residu
+  OUT : vecteur resultat x
+  RETOUR : scalaire contenant le nombre d'iteration
+*/
+int CG(double **A, double *b, double *x, double *r)
+{
+	int i, j, iter = 0;
+	int maxiter = max(100, sqrt(n));
+	double alpha, M, Mold, beta;
+	double *v;
+
+	v = (double*) malloc(n * sizeof(double));
+
+	for(i = 0; i < n; i++)
+	{
+		r[i] = b[i];
+		v[i] = r[i];
+	}
+
+	M = prodScal(r);
+
+	while(((norme(r) / norme(b)) > DBL_EPSILON) && (iter < maxiter))
+	{
+		iter++;
+		alpha = M / produitT(v, A);
+
+		for(i = 0; i < n; i++)
+			x[i] += alpha * v[i];
+
+		for(i = 0; i < n; i++)
+		{
+			for(j = 0; j < n; j++)
+				r[i] -= alpha * A[i][j] * v[j];
+		}
+		
+		Mold = M;
+		M = prodScal(r);
+		beta = M / Mold;
+
+		for(i = 0; i < n; i++)
+			v[i] = r[i] + beta * v[i];
+	}
+	
+	free(v);
+	return iter;
+}
