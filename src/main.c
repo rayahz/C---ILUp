@@ -36,7 +36,7 @@ int main()
 	poisson2D(A);
 	//matrixMarket(A, "e05r0200.mtx");
 	//affichageMat(A);
-	affichageMatSpy(A);
+	//affichageMatSpy(A);
 
 	//printf("Matrice LUc\n");
 	//LUfact(A, LUc);
@@ -46,18 +46,23 @@ int main()
 	printf("Matrice LUi\n");
 	ilup(A, level, LUi);
 	//affichageMat(LUi);
-	affichageMatSpy(LUi);
+	//affichageMatSpy(LUi);
 
 	printf("Vecteur b\n");
 	vecteur_b(b);
-	affichageVect(b);
+	//affichageVect(b);
 	
-	printf("Ax = b (PCG)\n");
-	PCG(A, x, b, LUi, residu);
-	affichageVect(x);
+	//printf("Ax = b (PCG)\n");
+	//PCG(A, x, b, LUi, residu);
+	//affichageVect(x);
 	
-	printf("Vecteur residu issu du PCG\n");
+	//printf("Vecteur residu issu du PCG\n");
 	//affichageVect(residu);
+	
+	int iter = CGR(A, x, b);
+	printf("x \n");
+	affichageVect(x);
+	printf("iter=%d\n",iter);
 	
 	/* *** LIBERATION DES RESSOURCES *** */
 	free(A);

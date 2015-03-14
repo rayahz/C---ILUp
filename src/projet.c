@@ -356,40 +356,91 @@ void matrixMarket(double **A, char *nom)
 	fclose(fichier);
 }
 
-/*void CGR(double **A, double *x, double *b, double **B, double *r)
+/*
+  FONCTION : CGR
+  DESCRIPTION : permet d'effectuer le gradient conjugue residuel à partir d'une matrice preconditionne
+  IN : matrice initiale, vecteur resultat, vecteur recherche et vecteur residu
+  OUT : vecteur resultat x
+  RETOUR : scalaire contenant le nombre d'iteration
+*/
+int CGR(double **A, double *x, double *b)
 {
-	int i, j, iter = 0, maxiter;
+	int i, j, k, l, iter = 0, maxiter;
+	double erreur = DBL_MAX, alpha, beta; 
+	double **v, **Bp, *residu, *tmp1, *tmp2, *tmp3, *tmp4;
 	
-	// initialisation du maximum d'iterations
-	maxiter = max(100.0, sqrt(n))
+	//maxiter = max(100.0, sqrt(n));
+	maxiter = 1000;
+	tmp1 = (double*) malloc(n * sizeof(double));
+	tmp2 = (double*) malloc(n * sizeof(double));
+	tmp3 = (double*) malloc(n * sizeof(double));
+	tmp4 = (double*) malloc(n * sizeof(double));
+	residu = (double*) calloc(n, sizeof(double));
+	v = (double**) calloc(n, sizeof(double));
+	Bp = (double**) calloc(n, sizeof(double));
 	
 	for(i = 0; i < n; i++)
 	{
-		r[i] = 0.0;
-		for(j = 0; j < n; j++)
-			r[i] = r[i] + b[j] - A[i][j] * x[j];
-		p[i] = r[i];
+		v[i] = (double*) calloc(maxiter, sizeof(double));
+		Bp[i] = (double*) calloc(maxiter, sizeof(double));
 	}
 	
-	while(((norme(r) / norme(b)) > DBL_EPSILON) && (iter < maxiter))
+	for(i = 0; i < n; i++)
 	{
-		alpha =  produitT(r, A, p) / (matVec(A, p) * matVec(A, p));
+		for(j = 0; j < n; j++)
+			residu[i] = residu[i] + b[j] - A[i][j] * x[j];
+
+		v[i][0] = residu[i];
+	}
+
+	j = 0;
+	
+	while((erreur >= DBL_EPSILON) && (iter < maxiter))
+	{
 		for(i = 0; i < n; i++)
 		{
-			x[i] = x[i] + alpha * p[i];
-			r[i] = r[i] - alpha * matVec(A, p);
+			for(k = 0; k < n; k++)
+				Bp[i][j] += A[i][k] * v[k][j];
 			
-		}		
-		
-		
+			tmp1[i] = Bp[i][j] * residu[i];
+			tmp2[i] = Bp[i][j] * Bp[i][j];
+			alpha += tmp1[i] / tmp2[i];
+			x[i] += alpha * v[i][j];
+			residu[i] -= alpha * Bp[i][j];
+			v[i][j + 1] = residu[i];
+			
+			for(k = 0; k < n; k++)
+				tmp3[i] += A[i][k] * residu[k];
+				
+			for(l = 0; l < j; l++)
+			{
+				tmp3[i] *= Bp[i][l];
+				tmp4[i] = Bp[i][l] * Bp[i][l];
+				beta = tmp3[i] / tmp4[i];
+				v[i][j + 1] -= beta * v[i][l];
+			}
+		}
+
+		j++;
+		iter++;
+		erreur = norme(residu) / norme(b);
 	}
 	
-}*/
+	free(v);
+	free(Bp);
+	free(residu);
+	free(tmp1);
+	free(tmp2);
+	free(tmp3);
+	free(tmp4);
+	
+	return iter;
+}
 
 /*
   FONCTION : prodScal
   DESCRIPTION : permet de calculer le produit scalaire d'un vecteur
-  IN : vecteur à calculer
+  IN : vecteur à calculproduiter
   OUT : /
   RETOUR : scalaire contenant le resultat
 */
@@ -413,11 +464,11 @@ double prodScal(double *v)
 */
 int CG(double **A, double *b, double *x, double *r)
 {
-	int i, j, iter = 0;
-	int maxiter = max(100, sqrt(n));
+	int i, j, iter = 0, maxiter;
 	double alpha, M, Mold, beta;
 	double *v;
 
+	maxiter = max(100.0, sqrt(n));
 	v = (double*) malloc(n * sizeof(double));
 
 	for(i = 0; i < n; i++)

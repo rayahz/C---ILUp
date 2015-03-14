@@ -18,7 +18,7 @@
 #define nx 8
 #define ny 4
 #define n (nx*ny)
-#define p 4
+#define p 2
 #define inf 1024
 
 ////////////////////////////////////
@@ -59,6 +59,9 @@ void LUfact(double**, double**);
 
 // permet d'effectuer le gradient conjugue 
 int CG(double **, double *, double *, double *);
+
+// permet d'effectuer le gradient conjugue residuel
+int CGR(double **, double *, double *);
 
 ///////////////////////////////////////
 /* *** PROCEDURES DE REMPLISSAGE *** */
