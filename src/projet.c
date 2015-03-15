@@ -366,29 +366,28 @@ void matrixMarket(double **A, char *nom)
 int CGR(double **A, double *x, double *b)
 {
 	int i, j, k, l, iter = 0, maxiter;
-	double erreur = DBL_MAX, alpha, beta; 
-	double **v, **Bp, *residu, *tmp1, *tmp2, *tmp3, *tmp4;
+	double erreur = DBL_MAX, alpha, beta, tmp1 = 0, tmp4 = 0; 
+	double **v, **Bp, *residu, *tmp2, *tmp3, *tmp5;
 	
 	//maxiter = max(100.0, sqrt(n));
 	maxiter = 1000;
-	tmp1 = (double*) malloc(n * sizeof(double));
 	tmp2 = (double*) malloc(n * sizeof(double));
 	tmp3 = (double*) malloc(n * sizeof(double));
-	tmp4 = (double*) malloc(n * sizeof(double));
+	tmp5 = (double*) malloc(n * sizeof(double));
 	residu = (double*) calloc(n, sizeof(double));
 	v = (double**) calloc(n, sizeof(double));
 	Bp = (double**) calloc(n, sizeof(double));
-	
+
 	for(i = 0; i < n; i++)
 	{
 		v[i] = (double*) calloc(maxiter, sizeof(double));
 		Bp[i] = (double*) calloc(maxiter, sizeof(double));
 	}
-	
+
 	for(i = 0; i < n; i++)
 	{
 		for(j = 0; j < n; j++)
-			residu[i] = residu[i] + b[j] - A[i][j] * x[j];
+			residu[j] += b[j] - A[i][j] * x[j];
 
 		v[i][0] = residu[i];
 	}
@@ -400,23 +399,25 @@ int CGR(double **A, double *x, double *b)
 		for(i = 0; i < n; i++)
 		{
 			for(k = 0; k < n; k++)
+			{
 				Bp[i][j] += A[i][k] * v[k][j];
-			
-			tmp1[i] = Bp[i][j] * residu[i];
-			tmp2[i] = Bp[i][j] * Bp[i][j];
-			alpha += tmp1[i] / tmp2[i];
+				tmp2[k] = Bp[k][j];
+			}
+
+			tmp1 += Bp[i][j] * residu[i];
+			alpha = tmp1 / prodScal(tmp2);
 			x[i] += alpha * v[i][j];
 			residu[i] -= alpha * Bp[i][j];
 			v[i][j + 1] = residu[i];
-			
+
 			for(k = 0; k < n; k++)
 				tmp3[i] += A[i][k] * residu[k];
-				
+
 			for(l = 0; l < j; l++)
 			{
-				tmp3[i] *= Bp[i][l];
-				tmp4[i] = Bp[i][l] * Bp[i][l];
-				beta = tmp3[i] / tmp4[i];
+				tmp4 += tmp3[i] * Bp[i][l];
+				tmp5[i] = Bp[i][l];
+				beta = tmp4 / prodScal(tmp5);
 				v[i][j + 1] -= beta * v[i][l];
 			}
 		}
@@ -429,10 +430,9 @@ int CGR(double **A, double *x, double *b)
 	free(v);
 	free(Bp);
 	free(residu);
-	free(tmp1);
 	free(tmp2);
 	free(tmp3);
-	free(tmp4);
+	free(tmp5);
 	
 	return iter;
 }
