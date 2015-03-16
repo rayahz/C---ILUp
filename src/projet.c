@@ -375,8 +375,8 @@ int CGR(double **A, double *x, double *b)
 	tmp3 = (double*) malloc(n * sizeof(double));
 	tmp5 = (double*) malloc(n * sizeof(double));
 	residu = (double*) calloc(n, sizeof(double));
-	v = (double**) calloc(n, sizeof(double));
-	Bp = (double**) calloc(n, sizeof(double));
+	v = (double**) calloc(n, sizeof(double*));
+	Bp = (double**) calloc(n, sizeof(double*));
 
 	for(i = 0; i < n; i++)
 	{
@@ -387,7 +387,9 @@ int CGR(double **A, double *x, double *b)
 	for(i = 0; i < n; i++)
 	{
 		for(j = 0; j < n; j++)
-			residu[j] += b[j] - A[i][j] * x[j];
+			residu[i] += A[i][j] * x[j];
+		
+		residu[i] = b[i] - residu[i];
 
 		v[i][0] = residu[i];
 	}
@@ -402,16 +404,18 @@ int CGR(double **A, double *x, double *b)
 			{
 				Bp[i][j] += A[i][k] * v[k][j];
 				tmp2[k] = Bp[k][j];
+				tmp1 += Bp[k][j] * residu[k];
 			}
-
-			tmp1 += Bp[i][j] * residu[i];
+			
 			alpha = tmp1 / prodScal(tmp2);
-			x[i] += alpha * v[i][j];
-			residu[i] -= alpha * Bp[i][j];
-			v[i][j + 1] = residu[i];
-
+			
 			for(k = 0; k < n; k++)
+			{
+				x[k] += alpha * v[k][j];
+				residu[k] -= alpha * Bp[k][j];
+				v[k][j + 1] = residu[k];
 				tmp3[i] += A[i][k] * residu[k];
+			}
 
 			for(l = 0; l < j; l++)
 			{
