@@ -59,7 +59,8 @@ int main()
 	//printf("Vecteur residu issu du PCG\n");
 	//affichageVect(residu);
 	
-	int iter = CGR(A, x, b);
+	printf("CGR\n");
+	int iter = CGR(LUi, x, b);
 	printf("x \n");
 	affichageVect(x);
 	printf("iter=%d\n",iter);

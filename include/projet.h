@@ -15,8 +15,8 @@
 
 #define min(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define max(X, Y) (((X) < (Y)) ? (Y) : (X))
-#define nx 3
-#define ny 3
+#define nx 8
+#define ny 4
 #define n (nx*ny)
 #define p 2
 #define inf 1024

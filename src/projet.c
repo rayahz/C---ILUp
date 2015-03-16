@@ -365,78 +365,90 @@ void matrixMarket(double **A, char *nom)
 */
 int CGR(double **A, double *x, double *b)
 {
-	int i, j, k, l, iter = 0, maxiter;
-	double erreur = DBL_MAX, alpha, beta, tmp1 = 0, tmp4 = 0; 
-	double **v, **Bp, *residu, *tmp2, *tmp3, *tmp5;
+	int i, j, l, iter = 0, maxiter;
+	double erreur, alpha, beta, tmp1 = 0, tmp2 = 0, bnrm2 = norme(b); 
+	double *v, *Ap, *Ar, *residu, *betaP;
 	
 	//maxiter = max(100.0, sqrt(n));
 	maxiter = 1000;
-	tmp2 = (double*) malloc(n * sizeof(double));
-	tmp3 = (double*) malloc(n * sizeof(double));
-	tmp5 = (double*) malloc(n * sizeof(double));
 	residu = (double*) calloc(n, sizeof(double));
-	v = (double**) calloc(n, sizeof(double*));
-	Bp = (double**) calloc(n, sizeof(double*));
-
-	for(i = 0; i < n; i++)
-	{
-		v[i] = (double*) calloc(maxiter, sizeof(double));
-		Bp[i] = (double*) calloc(maxiter, sizeof(double));
-	}
-
+	v = (double*) calloc(n, sizeof(double));
+	Ar = (double*) calloc(n, sizeof(double));
+	Ap = (double*) calloc(n, sizeof(double));
+	
+	
 	for(i = 0; i < n; i++)
 	{
 		for(j = 0; j < n; j++)
 			residu[i] += A[i][j] * x[j];
 		
 		residu[i] = b[i] - residu[i];
-
-		v[i][0] = residu[i];
+		v[i] = residu[i];
 	}
-
-	j = 0;
 	
-	while((erreur >= DBL_EPSILON) && (iter < maxiter))
+	if(bnrm2 == 0.0)
+		bnrm2 = 1.0;
+		
+	erreur = norme(residu) / bnrm2;
+	
+	while((erreur >= 0.000001) && (iter < maxiter))
 	{
 		for(i = 0; i < n; i++)
 		{
-			for(k = 0; k < n; k++)
-			{
-				Bp[i][j] += A[i][k] * v[k][j];
-				tmp2[k] = Bp[k][j];
-				tmp1 += Bp[k][j] * residu[k];
-			}
-			
-			alpha = tmp1 / prodScal(tmp2);
-			
-			for(k = 0; k < n; k++)
-			{
-				x[k] += alpha * v[k][j];
-				residu[k] -= alpha * Bp[k][j];
-				v[k][j + 1] = residu[k];
-				tmp3[i] += A[i][k] * residu[k];
-			}
-
-			for(l = 0; l < j; l++)
-			{
-				tmp4 += tmp3[i] * Bp[i][l];
-				tmp5[i] = Bp[i][l];
-				beta = tmp4 / prodScal(tmp5);
-				v[i][j + 1] -= beta * v[i][l];
-			}
+			for(j = 0; j < n; j++)
+				Ap[i] += A[i][j] * v[j];
 		}
+		
+		for(j = 0; j < n; j++)
+			tmp1 += residu[j] * Ap[j];
 
-		j++;
+		alpha = tmp1 / prodScal(Ap);
+
+		for(j = 0; j < n; j++)
+		{	
+			x[j] += alpha * v[j];
+			residu[j] -= alpha * Ap[j];
+		}
+		betaP = (double*) calloc(iter+1, sizeof(double));
+		for(l = 0; l < iter+1; l++)
+		{
+			for(i = 0; i < n; i++)
+			{
+				Ap[i] = 0.0;
+				Ar[i] = 0.0;
+				
+				for(j = 0; j < n; j++)
+				{
+					Ar[i] += A[i][j] * residu[j];
+					Ap[i] += A[i][j] * v[j];
+				}
+			}
+		
+			for(j = 0; j < n; j++)
+				tmp2 += Ar[j] * Ap[j];
+
+			betaP[l] = tmp2 / prodScal(Ap);
+		}
+		
+		for(l = 0; l < iter+1; l++)
+		{
+			for(i = 0; i < n; i++)
+				v[i] += betaP[l] * v[i];
+		}
+		
+		for(i = 0; i < n; i++)
+			v[i] += residu[i];
+
 		iter++;
-		erreur = norme(residu) / norme(b);
+		erreur = norme(residu) / bnrm2;
+		free(betaP);
 	}
 	
 	free(v);
-	free(Bp);
+	free(Ap);
+	free(Ar);
 	free(residu);
-	free(tmp2);
-	free(tmp3);
-	free(tmp5);
+	//free(betaP);
 	
 	return iter;
 }
