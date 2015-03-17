@@ -219,6 +219,45 @@ double produitT(double *v, double **a)
 	return r2;
 }
 
+void InvdiagMat(int NbElement, double **Mat, double **Minv)
+{
+	double **temp;
+	int i, j, k;
+	
+	temp = (double**) calloc(NbElement, sizeof(double*));
+	
+	for(i = 0; i < NbElement; i++)
+		temp[i] = (double*) calloc(NbElement, sizeof(double));
+
+	for(i = 0; i < NbElement; i++)
+	{
+		for(j = 0; j < NbElement; j++)
+		{
+			temp[i][i] = 1 / Mat[i][i];
+		
+			if(j != i)
+				temp[i][j]=-Mat[i][j]/Mat[i][i];
+			
+			for(k=0;k<NbElement;k++)
+			{
+				if(k!=i)
+					temp[k][i]=Mat[k][i]/Mat[i][i];
+					
+				if(j!=i &&k!=i)
+					temp[k][j]=Mat[k][j]-Mat[i][j]*Mat[k][i]/Mat[i][i];
+			}
+		}
+		
+		for(i=0;i<NbElement;i++)
+		{
+			for(j=0;j<NbElement;j++)
+				Minv[i][j]=temp[i][j];
+		}
+	}
+	
+	free(temp);
+}
+
 /*
   PROCEDURE : PCG
   DESCRIPTION : permet d'effectuer le gradient conjugue preconditionne à partir d'une matrice conditionnée (LU incomplete)
@@ -227,8 +266,88 @@ double produitT(double *v, double **a)
 */
 void PCG(double **A, double *x, double *b, double **B, double *r)
 {
+	int iter = 0, i, j, k, maxiter = max(100.0, sqrt(n));
+	double alpha, bnrm2 = norme(b);
+	double *Ap, beta, *v, **M, *tmpR, *tmpZ, *z;
+
+	M = (double**) calloc(n, sizeof(double*));
+	Ap = (double*) calloc(n, sizeof(double));
+	v = (double*) calloc(n, sizeof(double));
+	z = (double*) calloc(n, sizeof(double));
+	tmpZ = (double*) calloc(n, sizeof(double));
+	tmpR = (double*) calloc(n, sizeof(double));
+	
+	for(i = 0; i < n; i++)
+		M[i] = (double*) calloc(n, sizeof(double*));
+	
+	InvdiagMat(n, B, M);
+	
+	for(i = 0; i < n; i++)
+	{
+		for(j = 0; j < n; j++)
+			r[i] += B[i][j] * x[j];
+
+		r[i] = b[i] - r[i];
+	}
+	
+	for(i= 0;i<n;i++)
+	{
+		for(j = 0; j < n; j++)
+			z[i] += M[i][j] * r[j];
+		
+		v[i] = z[i];
+	}
+
+	if(bnrm2 == 0.0) 
+		bnrm2 = 1.0;
+
+	while(((norme(r) / bnrm2) > DBL_EPSILON) && (iter < maxiter))
+	{
+		iter++;
+
+		for(i = 0; i < n; i++)
+		{
+			Ap[i] = 0.0;
+			for(j = 0; j < n; j++)
+				Ap[i] += B[i][j] * v[j];
+		}
+		
+		alpha = prodScal2(r, z) / prodScal2(Ap, v);
+		
+		for(i = 0; i < n; i++)
+		{
+			x[i] += alpha * v[i];
+			tmpR[i] = r[i];
+			r[i] -= alpha * Ap[i];
+		}
+		
+		for(i = 0; i < n; i++)
+		{
+			tmpZ[i] = z[i];
+			for(j = 0; j < n; j++)
+				z[i] += M[i][j] * r[j];
+		}
+		
+		beta = prodScal2(r, z) / prodScal2(tmpR, tmpZ);
+		
+		for(i = 0; i < n; i++)
+			v[i] = z[i] + beta * v[i];
+	}
+	
+	free(Ap);
+	free(v);
+	free(M);
+	free(tmpR);
+	free(tmpZ);
+	free(z);
+	
+	printf("iter=%d\n",iter);
+}
+
+/*void PCG(double **A, double *x, double *b, double **B, double *r)
+{
 	int i, j, iter = 0, maxiter;
-	double alpha, M, Mold, beta, *m;
+	double alpha, M, Mold, beta, *m, bnrm2 = norme(b), erreur;
 	
 	m = (double*) malloc(n * sizeof(double));
 	
@@ -249,7 +368,12 @@ void PCG(double **A, double *x, double *b, double **B, double *r)
 			m[i] = m[i] + B[i][j] * r[j];
 	}
 
-	while(((norme(r) / norme(b)) > DBL_EPSILON) && (iter < maxiter))
+	if(bnrm2 == 0.0)
+		bnrm2 = 1.0;
+	
+	erreur = norme(r) / bnrm2;
+	
+	while((erreur > DBL_EPSILON) && (iter < maxiter))
 	{
 		iter++;
 		// calcul = M / (m' * A * m)
@@ -279,7 +403,7 @@ void PCG(double **A, double *x, double *b, double **B, double *r)
 
 	printf("nb iteration = %d\n", iter);
 	free(m);
-}
+}*/
 
 /*
   PROCEDURE : vecteur_b
@@ -365,90 +489,82 @@ void matrixMarket(double **A, char *nom)
 */
 int CGR(double **A, double *x, double *b)
 {
-	int i, j, l, iter = 0, maxiter;
-	double erreur, alpha, beta, tmp1 = 0, tmp2 = 0, bnrm2 = norme(b); 
-	double *v, *Ap, *Ar, *residu, *betaP;
+	int iter = 0, i, j, k, maxiter = max(100.0, sqrt(n));
+	double alpha, bnrm2 = norme(b);
+	double *Ap, *Ar, *beta, *r, **v;
+
+	Ap = (double*) malloc(n * sizeof(double));
+	Ar = (double*) malloc(n * sizeof(double));
+	r = (double*) calloc(n, sizeof(double));
+	v = (double**) calloc(n, sizeof(double*));
 	
-	//maxiter = max(100.0, sqrt(n));
-	maxiter = 1000;
-	residu = (double*) calloc(n, sizeof(double));
-	v = (double*) calloc(n, sizeof(double));
-	Ar = (double*) calloc(n, sizeof(double));
-	Ap = (double*) calloc(n, sizeof(double));
-	
-	
+	for(i = 0; i < n; i++)
+		v[i] = (double*) calloc(maxiter, sizeof(double));
+
 	for(i = 0; i < n; i++)
 	{
 		for(j = 0; j < n; j++)
-			residu[i] += A[i][j] * x[j];
-		
-		residu[i] = b[i] - residu[i];
-		v[i] = residu[i];
+			r[i] += A[i][j] * x[j];
+
+		r[i] = b[i] - r[i];
+		v[i][0] = r[i];
 	}
-	
-	if(bnrm2 == 0.0)
+
+	if(bnrm2 == 0.0) 
 		bnrm2 = 1.0;
-		
-	erreur = norme(residu) / bnrm2;
-	
-	while((erreur >= 0.000001) && (iter < maxiter))
+
+	while(((norme(r) / bnrm2) > DBL_EPSILON) && (iter < maxiter))
 	{
+		iter++;
+
 		for(i = 0; i < n; i++)
 		{
+			Ap[i] = 0.0;
 			for(j = 0; j < n; j++)
-				Ap[i] += A[i][j] * v[j];
+				Ap[i] += A[i][j] * v[j][iter - 1];
 		}
 		
-		for(j = 0; j < n; j++)
-			tmp1 += residu[j] * Ap[j];
-
-		alpha = tmp1 / prodScal(Ap);
-
-		for(j = 0; j < n; j++)
-		{	
-			x[j] += alpha * v[j];
-			residu[j] -= alpha * Ap[j];
+		alpha = prodScal2(r, Ap) / prodScal(Ap);
+		
+		for(i = 0; i < n; i++)
+		{
+			x[i] += alpha * v[i][iter - 1];
+			r[i] -= alpha * Ap[i];
 		}
-		betaP = (double*) calloc(iter+1, sizeof(double));
-		for(l = 0; l < iter+1; l++)
+
+		beta = (double*) malloc(iter * sizeof(double));
+		
+		for(k = 0; k < iter; k++)
 		{
 			for(i = 0; i < n; i++)
 			{
 				Ap[i] = 0.0;
 				Ar[i] = 0.0;
-				
 				for(j = 0; j < n; j++)
 				{
-					Ar[i] += A[i][j] * residu[j];
-					Ap[i] += A[i][j] * v[j];
+					Ap[i] += A[i][j] * v[j][k];
+					Ar[i] += A[i][j] * r[j];
 				}
 			}
-		
-			for(j = 0; j < n; j++)
-				tmp2 += Ar[j] * Ap[j];
-
-			betaP[l] = tmp2 / prodScal(Ap);
+			beta[k] = (-1) * prodScal2(Ar, Ap) / prodScal(Ap);
 		}
 		
-		for(l = 0; l < iter+1; l++)
+		for(k = 0; k < iter; k++)
 		{
 			for(i = 0; i < n; i++)
-				v[i] += betaP[l] * v[i];
+				v[i][iter] += beta[k] * v[i][k];
 		}
 		
 		for(i = 0; i < n; i++)
-			v[i] += residu[i];
+			v[i][iter] += r[i];
 
-		iter++;
-		erreur = norme(residu) / bnrm2;
-		free(betaP);
+		free(beta);
 	}
 	
-	free(v);
 	free(Ap);
 	free(Ar);
-	free(residu);
-	//free(betaP);
+	free(r);
+	free(v);
 	
 	return iter;
 }
@@ -467,6 +583,17 @@ double prodScal(double *v)
 
 	for(i = 0; i < n; i++)
 		resultat += v[i] * v[i];
+
+	return resultat;
+}
+
+double prodScal2(double *v, double *v2)
+{
+	int i;
+	double resultat = 0.0;
+
+	for(i = 0; i < n; i++)
+		resultat += v[i] * v2[i];
 
 	return resultat;
 }

@@ -44,6 +44,8 @@ double produitT(double*, double**);
 
 // permet de calculer le produit scalaire d'un vecteur
 double prodScal(double *);
+double prodScal2(double *, double *);
+void InvdiagMat(int, double **, double **);
 
 //////////////////////////////////
 /* *** PROCEDURES DU PROJET *** */

@@ -52,18 +52,18 @@ int main()
 	vecteur_b(b);
 	//affichageVect(b);
 	
-	//printf("Ax = b (PCG)\n");
-	//PCG(A, x, b, LUi, residu);
-	//affichageVect(x);
-	
+	printf("Ax = b (PCG)\n");
+	PCG(A, x, b, LUi, residu);
+	affichageVect(x);
+
 	//printf("Vecteur residu issu du PCG\n");
 	//affichageVect(residu);
 	
-	printf("CGR\n");
+	/*printf("CGR\n");
 	int iter = CGR(LUi, x, b);
 	printf("x \n");
 	affichageVect(x);
-	printf("iter=%d\n",iter);
+	printf("iter=%d\n",iter);*/
 	
 	/* *** LIBERATION DES RESSOURCES *** */
 	free(A);
