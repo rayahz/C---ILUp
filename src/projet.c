@@ -264,146 +264,62 @@ void InvdiagMat(int NbElement, double **Mat, double **Minv)
   IN : matrice initiale, vecteur recherche, vecteur resultat, matrice A sous forme ILU et vecteur residu
   OUT : vecteur resultat x
 */
-void PCG(double **A, double *x, double *b, double **B, double *r)
+int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 {
-	int iter = 0, i, j, k, maxiter = max(100.0, sqrt(n));
-	double alpha, bnrm2 = norme(b);
-	double *Ap, beta, *v, **M, *tmpR, *tmpZ, *z;
-
-	M = (double**) calloc(n, sizeof(double*));
-	Ap = (double*) calloc(n, sizeof(double));
+	int iter = 0, i, j, maxiter = max(100.0, sqrt(n));
+	double alpha, beta, M, Mold, bnrm2 = norme(b);
+	double *Ap, *Br, *r, *v;
+	int Nloc = info->nloc;
+	Ap = (double*) malloc(n * sizeof(double));
+	Br = (double*) malloc(n * sizeof(double));
+	r = (double*) malloc(n * sizeof(double));
 	v = (double*) calloc(n, sizeof(double));
-	z = (double*) calloc(n, sizeof(double));
-	tmpZ = (double*) calloc(n, sizeof(double));
-	tmpR = (double*) calloc(n, sizeof(double));
-	
-	for(i = 0; i < n; i++)
-		M[i] = (double*) calloc(n, sizeof(double*));
-	
-	InvdiagMat(n, B, M);
-	
-	for(i = 0; i < n; i++)
-	{
-		for(j = 0; j < n; j++)
-			r[i] += B[i][j] * x[j];
 
-		r[i] = b[i] - r[i];
-	}
-	
-	for(i= 0;i<n;i++)
-	{
-		for(j = 0; j < n; j++)
-			z[i] += M[i][j] * r[j];
-		
-		v[i] = z[i];
-	}
+	for(i=0; i<n; i++)
+		r[i] = b[i];
 
-	if(bnrm2 == 0.0) 
-		bnrm2 = 1.0;
+	for(i=0; i<n; i++)
+		for(j=0; j<n; j++)
+			v[i] += B[i][j] * r[j];
+	M = prodScal(r, v, Nloc);
 
-	while(((norme(r) / bnrm2) > DBL_EPSILON) && (iter < maxiter))
-	{
+	if(bnrm2 == 0.0) bnrm2 = 1.0;
+
+	while(((norme(r) / bnrm2) > DBL_EPSILON) && (iter < maxiter)){
 		iter++;
 
-		for(i = 0; i < n; i++)
-		{
+		for(i=0; i<n; i++){
 			Ap[i] = 0.0;
-			for(j = 0; j < n; j++)
-				Ap[i] += B[i][j] * v[j];
+			for(j=0; j<n; j++)
+				Ap[i] += A[i][j] * v[j];
 		}
-		
-		alpha = prodScal2(r, z) / prodScal2(Ap, v);
-		
-		for(i = 0; i < n; i++)
-		{
+		alpha = M / prodScal(v, Ap, Nloc);
+
+		for(i=0; i<n; i++){
 			x[i] += alpha * v[i];
-			tmpR[i] = r[i];
 			r[i] -= alpha * Ap[i];
 		}
-		
-		for(i = 0; i < n; i++)
-		{
-			tmpZ[i] = z[i];
-			for(j = 0; j < n; j++)
-				z[i] += M[i][j] * r[j];
-		}
-		
-		beta = prodScal2(r, z) / prodScal2(tmpR, tmpZ);
-		
-		for(i = 0; i < n; i++)
-			v[i] = z[i] + beta * v[i];
-	}
-	
-	free(Ap);
-	free(v);
-	free(M);
-	free(tmpR);
-	free(tmpZ);
-	free(z);
-	
-	printf("iter=%d\n",iter);
-}
 
-/*void PCG(double **A, double *x, double *b, double **B, double *r)
-{
-	int i, j, iter = 0, maxiter;
-	double alpha, M, Mold, beta, *m, bnrm2 = norme(b), erreur;
-	
-	m = (double*) malloc(n * sizeof(double));
-	
-	// initialisation du maximum d'iterations
-	maxiter = max(100.0, sqrt(n));
-	
-	// initialisation du vecteur residu
-	for(i = 0; i < n; i++)
-		r[i] = b[i];
-	
-	// calcul = r' * B * r
-	M = produitT(r, B);
-	
-	for(i = 0; i < n; i++)
-	{
-		m[i] = 0.0;
-		for(j = 0; j < n; j++)
-			m[i] = m[i] + B[i][j] * r[j];
-	}
-
-	if(bnrm2 == 0.0)
-		bnrm2 = 1.0;
-	
-	erreur = norme(r) / bnrm2;
-	
-	while((erreur > DBL_EPSILON) && (iter < maxiter))
-	{
-		iter++;
-		// calcul = M / (m' * A * m)
-		alpha = M / produitT(m, A); 
-		
-		for(i = 0; i < n; i++)
-		{
-			// calcul du vecteur solution
-			x[i] = x[i] + alpha * m[i]; 
-	
-			// calcul du vecteur residu
-			for(j = 0; j < n; j++)
-				r[i] = r[i] - alpha * A[i][j] * m[j]; 
-		}
-		
 		Mold = M;
-		M = produitT(r, B); // calcul = r' * B * r
-		beta = M / Mold;
-		
-		for(i = 0; i < n; i++)
-		{
-			for(j = 0; j < n; j++)
-				m[i] = B[i][j] * r[j];
-			m[i] = m[i] + beta * m[i];
-		}
-	}
 
-	printf("nb iteration = %d\n", iter);
-	free(m);
-}*/
+		for(i=0; i<n; i++){
+			Br[i] = 0.0;
+			for(j=0; j<n; j++)
+				Br[i] += B[i][j] * r[j];
+		}
+		M = prodScal(r, Br, Nloc);
+
+		beta = M / Mold;
+
+		for(i=0; i<n; i++)
+			v[i] = Br[i] + beta * v[i];
+	}
+	free(Ap);
+	free(Br);
+	free(r);
+	free(v);
+	return iter;
+}
 
 /*
   PROCEDURE : vecteur_b
@@ -487,16 +403,18 @@ void matrixMarket(double **A, char *nom)
   OUT : vecteur resultat x
   RETOUR : scalaire contenant le nombre d'iteration
 */
-int CGR(double **A, double *x, double *b)
+int CGR(double **A, double *x, double *b, struct info_t *info)
 {
 	int iter = 0, i, j, k, maxiter = max(100.0, sqrt(n));
 	double alpha, bnrm2 = norme(b);
 	double *Ap, *Ar, *beta, *r, **v;
 
-	Ap = (double*) malloc(n * sizeof(double));
-	Ar = (double*) malloc(n * sizeof(double));
-	r = (double*) calloc(n, sizeof(double));
-	v = (double**) calloc(n, sizeof(double*));
+	int Nloc = info->nloc;
+	
+	Ap = (double*) malloc(Nloc * sizeof(double));
+	Ar = (double*) malloc(Nloc * sizeof(double));
+	r = (double*) calloc(Nloc, sizeof(double));
+	v = (double**) calloc(Nloc, sizeof(double*));
 	
 	for(i = 0; i < n; i++)
 		v[i] = (double*) calloc(maxiter, sizeof(double));
@@ -524,7 +442,7 @@ int CGR(double **A, double *x, double *b)
 				Ap[i] += A[i][j] * v[j][iter - 1];
 		}
 		
-		alpha = prodScal2(r, Ap) / prodScal(Ap);
+		alpha = prodScal(r, Ap, Nloc) / prodScal(Ap, Ap, Nloc);
 		
 		for(i = 0; i < n; i++)
 		{
@@ -546,7 +464,7 @@ int CGR(double **A, double *x, double *b)
 					Ar[i] += A[i][j] * r[j];
 				}
 			}
-			beta[k] = (-1) * prodScal2(Ar, Ap) / prodScal(Ap);
+			beta[k] = (-1) * prodScal(Ar, Ap, Nloc) / prodScal(Ap, Ap, Nloc);
 		}
 		
 		for(k = 0; k < iter; k++)
@@ -569,33 +487,17 @@ int CGR(double **A, double *x, double *b)
 	return iter;
 }
 
-/*
-  FONCTION : prodScal
-  DESCRIPTION : permet de calculer le produit scalaire d'un vecteur
-  IN : vecteur à calculproduiter
-  OUT : /
-  RETOUR : scalaire contenant le resultat
-*/
-double prodScal(double *v)
+double prodScal(double *v, double *v2, int N)
 {
 	int i;
-	double resultat = 0.0;
+	double result_local = 0.0, result_global;
 
-	for(i = 0; i < n; i++)
-		resultat += v[i] * v[i];
-
-	return resultat;
-}
-
-double prodScal2(double *v, double *v2)
-{
-	int i;
-	double resultat = 0.0;
-
-	for(i = 0; i < n; i++)
-		resultat += v[i] * v2[i];
-
-	return resultat;
+	for(i = 0; i < N; i++)
+		result_local += v[i] * v2[i];
+	
+	MPI_Allreduce(&result_local, &result_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+	
+	return result_global;
 }
 
 /*
@@ -605,22 +507,23 @@ double prodScal2(double *v, double *v2)
   OUT : vecteur resultat x
   RETOUR : scalaire contenant le nombre d'iteration
 */
-int CG(double **A, double *b, double *x, double *r)
+int CG(double **A, double *b, double *x, struct info_t *info)
 {
 	int i, j, iter = 0, maxiter;
 	double alpha, M, Mold, beta;
-	double *v;
-
+	double *v, *r;
+	int Nloc = info->nloc;
 	maxiter = max(100.0, sqrt(n));
-	v = (double*) malloc(n * sizeof(double));
+	v = (double*) malloc(Nloc * sizeof(double));
+	r = (double*) malloc(Nloc * sizeof(double));
 
-	for(i = 0; i < n; i++)
+	for(i = 0; i < Nloc; i++)
 	{
 		r[i] = b[i];
 		v[i] = r[i];
 	}
 
-	M = prodScal(r);
+	M = prodScal(r, r, Nloc);
 
 	while(((norme(r) / norme(b)) > DBL_EPSILON) && (iter < maxiter))
 	{
@@ -637,7 +540,7 @@ int CG(double **A, double *b, double *x, double *r)
 		}
 		
 		Mold = M;
-		M = prodScal(r);
+		M = prodScal(r, r, Nloc);
 		beta = M / Mold;
 
 		for(i = 0; i < n; i++)
@@ -645,5 +548,31 @@ int CG(double **A, double *b, double *x, double *r)
 	}
 	
 	free(v);
+	free(r);
 	return iter;
+}
+
+void MPI_initialize(int argc, char **argv, struct info_t *info)
+{
+	int Q, R;
+	
+	MPI_Init(&argc, &argv);
+	MPI_Comm_rank(MPI_COMM_WORLD, &(info->rang));
+	MPI_Comm_size(MPI_COMM_WORLD, &(info->nproc));
+	
+	Q = n / info->nproc;
+	R = n % info->nproc;
+
+	info->ntot = n;
+
+	if (info->rang < R) 
+	{
+		info->nloc = Q+1;
+		info->ideb = info->rang * (Q+1);
+		info->ifin = info->ideb + info->nloc;
+	} else{
+		info->nloc = Q;
+		info->ideb = R * (Q+1) + (info->rang - R) * Q;
+		info->ifin = info->ideb + info->nloc;
+	}
 }

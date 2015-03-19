@@ -6,21 +6,18 @@
 */
 #include <projet.h>
 
-int main()
+int main(int argc, char **argv)
 {
 	/* *** DECLARATION DES VARIABLES *** */
 	int i, **level;
-	double **A, **LUc, *x, *residu, **LUi, *b;
-
+	double **A, **LUc, *x, **LUi, *b;
+	
 	/* *** INITIALISATION DES VARIABLES *** */
 	level = (int**) malloc(n * sizeof(int*));
-	
 	A = (double**) malloc(n * sizeof(double*));
 	LUi = (double**) malloc(n * sizeof(double*));
 	LUc = (double**) malloc(n * sizeof(double*));
-	
 	b = (double*) malloc(n * sizeof(double));
-	residu = (double*) calloc(n, sizeof(double));
 	x = (double*) calloc(n, sizeof(double));
 
 	for(i = 0; i < n; i++)
@@ -30,8 +27,14 @@ int main()
 		LUi[i] = (double*) malloc(n * sizeof(double));
 		LUc[i] = (double*) malloc(n * sizeof(double));
 	}
+
+	/* *** CORPS DU PROGRAMME PRINCIPAL *** */	
+	struct info_t info;
+	MPI_initialize(argc, argv, &info);
 	
-	/* *** CORPS DU PROGRAMME PRINCIPAL *** */
+	int Nloc = info.nloc;
+	printf("nloc=%d\n",Nloc);
+	
 	printf("Matrice A\n");
 	poisson2D(A);
 	//matrixMarket(A, "e05r0200.mtx");
@@ -53,7 +56,7 @@ int main()
 	//affichageVect(b);
 	
 	printf("Ax = b (PCG)\n");
-	PCG(A, x, b, LUi, residu);
+	PCG(A, x, b, LUi, &info);
 	affichageVect(x);
 
 	//printf("Vecteur residu issu du PCG\n");
@@ -71,8 +74,8 @@ int main()
 	free(LUc);
 	free(b);
 	free(x);
-	free(residu);
 	free(LUi);
 	
+		MPI_Finalize();
 	return 0;
 }

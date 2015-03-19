@@ -12,6 +12,7 @@
 #include <math.h>
 #include <float.h>
 #include <string.h>
+#include <mpi.h>
 
 #define min(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define max(X, Y) (((X) < (Y)) ? (Y) : (X))
@@ -20,6 +21,19 @@
 #define n (nx*ny)
 #define p 2
 #define inf 1024
+
+struct info_t 
+{
+	int nproc;
+	int rang;
+
+	int ntot;
+	int nloc;
+
+	int ideb;
+	int ifin;
+};
+
 
 ////////////////////////////////////
 /* *** PROCEDURES D'AFFICHAGE *** */
@@ -43,15 +57,13 @@ double norme(double*);
 double produitT(double*, double**); 
 
 // permet de calculer le produit scalaire d'un vecteur
-double prodScal(double *);
-double prodScal2(double *, double *);
-void InvdiagMat(int, double **, double **);
+double prodScal(double *, double *, int);
 
 //////////////////////////////////
 /* *** PROCEDURES DU PROJET *** */
 //////////////////////////////////
 // permet d'effecteur le gradient conjugue preconditionne
-void PCG(double**, double*, double*, double**, double*); 
+int PCG(double**, double*, double*, double**, struct info_t *); 
 
 // permet de calculer de la factorisation lu incompléte au niveau p
 void ilup(double**, int**, double**); 
@@ -60,10 +72,10 @@ void ilup(double**, int**, double**);
 void LUfact(double**, double**);
 
 // permet d'effectuer le gradient conjugue 
-int CG(double **, double *, double *, double *);
+int CG(double **, double *, double *, struct info_t *);
 
 // permet d'effectuer le gradient conjugue residuel
-int CGR(double **, double *, double *);
+int CGR(double **, double *, double *, struct info_t *);
 
 ///////////////////////////////////////
 /* *** PROCEDURES DE REMPLISSAGE *** */
@@ -76,5 +88,10 @@ void vecteur_b(double*);
 
 // permet d'initialiser une matrice provenant de matrix market
 void matrixMarket(double **, char*);
+
+///////////////////////////////////////
+/* *** PROCEDURES DE REMPLISSAGE *** */
+///////////////////////////////////////
+void MPI_initialize(int, char **, struct info_t *);
 
 #endif

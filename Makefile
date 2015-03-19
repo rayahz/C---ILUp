@@ -1,4 +1,4 @@
-CC=gcc
+CC=mpichcc
 RM=rm
 AR=ar
 LDFLAGS=
@@ -20,7 +20,7 @@ $(OBJ_DIR)%.o: $(SRC_DIR)%.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 $(EXEC): 
-	$(BIN_DIR)$(TARGET)
+	mpichexec -n ${NBR} $(BIN_DIR)$(TARGET)
 
 clean:
 	$(RM) $(BIN_DIR)$(TARGET) $(OBJ_FILES)
