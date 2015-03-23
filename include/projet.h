@@ -12,12 +12,13 @@
 #include <math.h>
 #include <float.h>
 #include <string.h>
-#include <mpi.h>
+#include <time.h>
+//#include <mpi.h>
 
 #define min(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define max(X, Y) (((X) < (Y)) ? (Y) : (X))
-#define nx 8
-#define ny 4
+#define nx 10
+#define ny 10
 #define n (nx*ny)
 #define p 2
 #define inf 1024
@@ -57,7 +58,10 @@ double norme(double*);
 double produitT(double*, double**); 
 
 // permet de calculer le produit scalaire d'un vecteur
-double prodScal(double *, double *, int);
+double prodScal(double *, double *);
+
+// permet de calculer le produit d'une matrice avec un vecteur
+void prodVect(double **, double *, double *);
 
 //////////////////////////////////
 /* *** PROCEDURES DU PROJET *** */

@@ -8,6 +8,9 @@
 
 int main(int argc, char **argv)
 {
+	struct timespec t1, t2;
+	clock_gettime(CLOCK_REALTIME, &t1);
+	
 	/* *** DECLARATION DES VARIABLES *** */
 	int i, **level;
 	double **A, **LUc, *x, **LUi, *b;
@@ -30,12 +33,9 @@ int main(int argc, char **argv)
 
 	/* *** CORPS DU PROGRAMME PRINCIPAL *** */	
 	struct info_t info;
-	MPI_initialize(argc, argv, &info);
+	//MPI_initialize(argc, argv, &info);
 	
-	int Nloc = info.nloc;
-	printf("nloc=%d\n",Nloc);
-	
-	printf("Matrice A\n");
+	//printf("Matrice A\n");
 	poisson2D(A);
 	//matrixMarket(A, "e05r0200.mtx");
 	//affichageMat(A);
@@ -44,20 +44,21 @@ int main(int argc, char **argv)
 	//printf("Matrice LUc\n");
 	//LUfact(A, LUc);
 	//affichageMat(LUc);
+	//affichageMat(A);
 	//affichageMatSpy(A);
 
-	printf("Matrice LUi\n");
+	//printf("Matrice LUi\n");
 	ilup(A, level, LUi);
 	//affichageMat(LUi);
 	//affichageMatSpy(LUi);
 
-	printf("Vecteur b\n");
+	//printf("Vecteur b\n");
 	vecteur_b(b);
 	//affichageVect(b);
 	
-	printf("Ax = b (PCG)\n");
+	//printf("Ax = b (PCG)\n");
 	PCG(A, x, b, LUi, &info);
-	affichageVect(x);
+	//affichageVect(x);
 
 	//printf("Vecteur residu issu du PCG\n");
 	//affichageVect(residu);
@@ -76,6 +77,10 @@ int main(int argc, char **argv)
 	free(x);
 	free(LUi);
 	
-		MPI_Finalize();
+	//MPI_Finalize();
+	
+	clock_gettime(CLOCK_REALTIME, &t2);
+	printf("%lg\n",1.*t2.tv_sec-t1.tv_sec+(t2.tv_nsec-t1.tv_nsec)/1e9);
+	
 	return 0;
 }
