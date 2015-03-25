@@ -24,5 +24,3 @@ double produitT(double*, double**);
 int PCG(double**, double*, double*, double**, struct info_t *); 
 void LUfact(double**, double**);
 int CGR(double **, double *, double *, struct info_t *);
-
-yanis
