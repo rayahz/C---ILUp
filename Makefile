@@ -1,4 +1,5 @@
 MPI=mpichcc
+MPI_RUN=mpichexec -n $(NBR)
 CC=gcc
 RM=rm
 AR=ar
@@ -15,13 +16,13 @@ BIN_DIR=./bin/
 all: $(TARGET)
 
 $(TARGET): $(OBJ_FILES)
-	$(CC) $(LDFLAGS) -o $(BIN_DIR)$(TARGET) $(OBJ_FILES) $(LFLAGS) -Wall -fopenmp
+	$(MPI) $(LDFLAGS) -o $(BIN_DIR)$(TARGET) $(OBJ_FILES) $(LFLAGS) -Wall -fopenmp
 
 $(OBJ_DIR)%.o: $(SRC_DIR)%.c
-	$(CC) $(CFLAGS) -c -o $@ $^ 
+	$(MPI) $(CFLAGS) -c -o $@ $^ 
 
 $(EXEC): 
-	$(BIN_DIR)$(TARGET) 
+	$(MPI_RUN) $(BIN_DIR)$(TARGET) 
 
 clean:
 	$(RM) $(BIN_DIR)$(TARGET) $(OBJ_FILES)

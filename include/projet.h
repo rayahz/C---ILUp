@@ -13,12 +13,12 @@
 #include <float.h>
 #include <string.h>
 #include <time.h>
-//#include <mpi.h>
+#include <mpi.h>
 
 #define min(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define max(X, Y) (((X) < (Y)) ? (Y) : (X))
-#define nx 10
-#define ny 10
+#define nx 45
+#define ny 40
 #define n (nx*ny)
 #define p 2
 #define inf 1024
@@ -27,12 +27,6 @@ struct info_t
 {
 	int nproc;
 	int rang;
-
-	int ntot;
-	int nloc;
-
-	int ideb;
-	int ifin;
 };
 
 
@@ -70,7 +64,7 @@ void prodVect(double **, double *, double *);
 int PCG(double**, double*, double*, double**, struct info_t *); 
 
 // permet de calculer de la factorisation lu incompléte au niveau p
-void ilup(double**, int**, double**); 
+void ilup(double**, int**, double**, struct info_t *); 
 
 // permet d'effectuer la factorisation LU complete
 void LUfact(double**, double**);

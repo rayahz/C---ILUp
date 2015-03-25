@@ -73,31 +73,22 @@ void poisson2D(double **A)
 {
 	int i;
 	
-	#pragma omp sections nowait
+	#pragma omp parallel for
+	for(i = 0; i < n; i++)
+		A[i][i] = 4.0;
+
+	#pragma omp parallel for 
+	for(i = 0; i < n - 1; i++)
 	{
-		#pragma omp section
-		{
-			for(i = 0; i < n; i++)
-				A[i][i] = 4.0;
-		}
+		A[i][i + 1] = -1.0;
+		A[i + 1][i] = -1.0;
+	}
 
-		#pragma omp section 
-		{
-			for(i = 0; i < n - 1; i++)
-			{
-				A[i][i + 1] = -1.0;
-				A[i + 1][i] = -1.0;
-			}
-		}
-
-		#pragma omp section 
-		{
-			for(i = 0; i < n - nx; i++)
-			{
-				A[i][i + nx] = -1.0;
-				A[i + nx][i] = -1.0;
-			}
-		}
+	#pragma omp parallel for 
+	for(i = 0; i < n - nx; i++)
+	{
+		A[i][i + nx] = -1.0;
+		A[i + nx][i] = -1.0;
 	}
 }
 
@@ -107,14 +98,14 @@ void poisson2D(double **A)
   IN : matrice initiale, matrice de niveaux de remplissage et matrice LUi 
   OUT : matrice LUi sous forme LU incomplet et matrice lev contenant le niveau de remplissage pour chaque element
 */
-void ilup(double **A, int **level, double **LUi)
+void ilup(double **A, int **level, double **LUi, struct info_t *info)
 {
 	int i, j, k;
+	int *map = malloc(n * (sizeof * map));
 	
-	// initialisation de la matrice de remplissage 
-	// si A(i,j) != 0
-		// alors lev(i,j) = 0
-		// sinon lev(i,j) = inf
+	for(i = 0; i < n; i++)
+		map[i] = (i) % (info->nproc);
+	
 	for(i = 0; i < n; i++)
 	{
 		for(j = 0; j < n; j++)
@@ -128,29 +119,40 @@ void ilup(double **A, int **level, double **LUi)
 		}
 	}
 	
-	for(i = 1; i < n; i++)
+	for(k = 0; k < n; k++)
 	{
-		for(k = 0; k <= i-1; k++)
-		{
-			if(level[i][k] <= p)
+		if(map[k] == (info->rang))
+		{ 
+			for(i = k+1; i < n; i++)
 			{
-				LUi[i][k] = LUi[i][k] / LUi[k][k]; // calcul
-			
-				for(j = k + 1; j < n; j++)	
-				{
-					LUi[i][j] = LUi[i][j] - LUi[i][k] * LUi[k][j]; // calcul
-					
-					// remplissage de la matrice de niveau de remplissage
-						// factorisation symbolique : Le but de cette étape est de calculer la structure de remplissage des facteurs avant l’étape de factorisation numérique.
-					if(fabs(LUi[i][j]) > DBL_EPSILON)
-						level[i][j] = min(level[i][j], level[i][k] + level[k][j] + 1);
-				}
+				if(level[i][k] <= p)
+					LUi[i][k] = LUi[i][k] / LUi[k][k];
 			}
 		}
 		
-		// tous les elements dont le niveau de remplissage est superieur à p sont remplaces par 0
+		MPI_Bcast (&A[k][k], n-k, MPI_DOUBLE, map[k], MPI_COMM_WORLD);
 
-		for(j = 0 ; j < n; j++)
+		for(j = k + 1; j < n; j++)
+		{
+			if(map[j] == (info->rang))
+			{
+				for(i = k + 1; i < n; i++)
+				{
+					if(level[i][k] <= p)
+					{
+						LUi[i][j] = LUi[i][j] - LUi[i][k] * LUi[k][j]; 
+
+						if(fabs(LUi[i][j]) > DBL_EPSILON)
+							level[i][j] = min(level[i][j], level[i][k] + level[k][j] + 1);
+					}
+				}
+			}
+		}
+	}
+	
+	for(j = 0 ; j < n; j++)	
+	{
+		for(i = 0 ; i < n; i++) 
 		{
 			if(level[i][j] > p)
 				LUi[i][j] = 0.0;
@@ -195,11 +197,7 @@ void LUfact(double **A, double **LU)
 */
 double norme(double *a)
 {
-	double resultat = 0.0;
-
-	resultat = prodScal(a, a);
-
-	return sqrt(fabs(resultat));
+	return sqrt(fabs(prodScal(a, a)));
 }
 
 /*
@@ -530,27 +528,9 @@ int CG(double **A, double *b, double *x, struct info_t *info)
 	return iter;
 }
 
-/*void MPI_initialize(int argc, char **argv, struct info_t *info)
+void MPI_initialize(int argc, char **argv, struct info_t *info)
 {
-	int Q, R;
-	
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &(info->rang));
 	MPI_Comm_size(MPI_COMM_WORLD, &(info->nproc));
-	
-	Q = n / info->nproc;
-	R = n % info->nproc;
-
-	info->ntot = n;
-
-	if (info->rang < R) 
-	{
-		info->nloc = Q+1;
-		info->ideb = info->rang * (Q+1);
-		info->ifin = info->ideb + info->nloc;
-	} else{
-		info->nloc = Q;
-		info->ideb = R * (Q+1) + (info->rang - R) * Q;
-		info->ifin = info->ideb + info->nloc;
-	}
-}*/
+}

@@ -33,7 +33,7 @@ int main(int argc, char **argv)
 
 	/* *** CORPS DU PROGRAMME PRINCIPAL *** */	
 	struct info_t info;
-	//MPI_initialize(argc, argv, &info);
+	MPI_initialize(argc, argv, &info);
 	
 	//printf("Matrice A\n");
 	poisson2D(A);
@@ -48,7 +48,7 @@ int main(int argc, char **argv)
 	//affichageMatSpy(A);
 
 	//printf("Matrice LUi\n");
-	ilup(A, level, LUi);
+	ilup(A, level, LUi, &info);
 	//affichageMat(LUi);
 	//affichageMatSpy(LUi);
 
@@ -63,11 +63,11 @@ int main(int argc, char **argv)
 	//printf("Vecteur residu issu du PCG\n");
 	//affichageVect(residu);
 	
-	/*printf("CGR\n");
-	int iter = CGR(LUi, x, b);
-	printf("x \n");
+	//printf("CGR\n");
+	//CGR(LUi, x, b);
+	
+	//printf("x \n");
 	affichageVect(x);
-	printf("iter=%d\n",iter);*/
 	
 	/* *** LIBERATION DES RESSOURCES *** */
 	free(A);
@@ -77,10 +77,10 @@ int main(int argc, char **argv)
 	free(x);
 	free(LUi);
 	
-	//MPI_Finalize();
+	MPI_Finalize();
 	
 	clock_gettime(CLOCK_REALTIME, &t2);
-	printf("%lg\n",1.*t2.tv_sec-t1.tv_sec+(t2.tv_nsec-t1.tv_nsec)/1e9);
+	printf("%lg\n", 1. * t2.tv_sec - t1.tv_sec + (t2.tv_nsec - t1.tv_nsec) / 1e9);
 	
 	return 0;
 }
