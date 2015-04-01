@@ -8,79 +8,64 @@
 
 int main(int argc, char **argv)
 {
-	struct timespec t1, t2;
-	clock_gettime(CLOCK_REALTIME, &t1);
-	
 	/* *** DECLARATION DES VARIABLES *** */
-	int i, **level;
-	double **A, **LUc, *x, **LUi, *b;
+	int i;
+	int **level;
+	double **A, *b, **LUi, *x;
+	double runtime, timer_start, timer_end;
+	struct info_t info;
+	
+	MPI_initialize(argc, argv, &info);
 	
 	/* *** INITIALISATION DES VARIABLES *** */
 	level = (int**) malloc(n * sizeof(int*));
 	A = (double**) malloc(n * sizeof(double*));
 	LUi = (double**) malloc(n * sizeof(double*));
-	LUc = (double**) malloc(n * sizeof(double*));
-	b = (double*) malloc(n * sizeof(double));
-	x = (double*) calloc(n, sizeof(double));
+	b = (double*) malloc(info.nloc * sizeof(double));
+	x = (double*) calloc(info.nloc, sizeof(double));
 
+	#pragma omp parallel for schedule(static)
 	for(i = 0; i < n; i++)
 	{
-		level[i] = (int*) malloc(n *sizeof(int));
-		A[i] = (double*) malloc(n * sizeof(double));
-		LUi[i] = (double*) malloc(n * sizeof(double));
-		LUc[i] = (double*) malloc(n * sizeof(double));
+		level[i] = (int*) malloc(info.nloc * sizeof(int));
+		A[i] = (double*) malloc(info.nloc * sizeof(double));
+		LUi[i] = (double*) malloc(info.nloc * sizeof(double));
 	}
 
 	/* *** CORPS DU PROGRAMME PRINCIPAL *** */	
-	struct info_t info;
-	MPI_initialize(argc, argv, &info);
+	timer_start = get_timer();
 	
-	//printf("Matrice A\n");
-	poisson2D(A);
-	//matrixMarket(A, "e05r0200.mtx");
-	//affichageMat(A);
-	//affichageMatSpy(A);
+	printf("Matrice A:\n");
+	poisson2D(A, &info);
+	//affichageMat(A, &info);
+	affichageMatSpy(A, &info);
 
-	//printf("Matrice LUc\n");
-	//LUfact(A, LUc);
-	//affichageMat(LUc);
-	//affichageMat(A);
-	//affichageMatSpy(A);
+	printf("Vecteur b:\n");
+	vecteur_b(b, &info);
+	//affichageVect(b, &info);
 
-	//printf("Matrice LUi\n");
+	prodMatVect(A, b, x, &info);
+	printf("vecteur x:\n");
+	affichageVect(x, &info);
+
+	printf("Matrice LUi\n");
 	ilup(A, level, LUi, &info);
-	//affichageMat(LUi);
-	//affichageMatSpy(LUi);
+	//affichageMat(LUi, &info);
+	affichageMatSpy(LUi,&info);
 
-	//printf("Vecteur b\n");
-	vecteur_b(b);
-	//affichageVect(b);
-	
-	//printf("Ax = b (PCG)\n");
-	PCG(A, x, b, LUi, &info);
-	//affichageVect(x);
+	timer_end = get_timer();
 
-	//printf("Vecteur residu issu du PCG\n");
-	//affichageVect(residu);
-	
-	//printf("CGR\n");
-	//CGR(LUi, x, b);
-	
-	//printf("x \n");
-	affichageVect(x);
-	
+	runtime = diff_time(timer_end, timer_start);
+	print_time(&info, runtime);
+
+	MPI_Finalize();
+
 	/* *** LIBERATION DES RESSOURCES *** */
 	free(A);
-	free(level);
-	free(LUc);
 	free(b);
-	free(x);
+	free(level);
 	free(LUi);
-	
-	MPI_Finalize();
-	
-	clock_gettime(CLOCK_REALTIME, &t2);
-	printf("%lg\n", 1. * t2.tv_sec - t1.tv_sec + (t2.tv_nsec - t1.tv_nsec) / 1e9);
+	free(x);
 	
 	return 0;
 }
