@@ -17,10 +17,10 @@
 
 #define min(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define max(X, Y) (((X) < (Y)) ? (Y) : (X))
-#define nx 60
-#define ny 60
+#define nx 6
+#define ny 4
 #define n (nx*ny)
-#define p 2
+#define p 3
 #define inf 1024
 
 struct info_t 

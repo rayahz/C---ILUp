@@ -35,20 +35,20 @@ int main(int argc, char **argv)
 	/* *** CORPS DU PROGRAMME PRINCIPAL *** */	
 	timer_start = get_timer();
 	
-	printf("Matrice A:\n");
+	//printf("Matrice A:\n");
 	poisson2D(A, &info);
 	//affichageMat(A, &info);
-	affichageMatSpy(A, &info);
+	//affichageMatSpy(A, &info);
 
-	printf("Vecteur b:\n");
+	//printf("Vecteur b:\n");
 	vecteur_b(b, &info);
 	//affichageVect(b, &info);
 
-	prodMatVect(A, b, x, &info);
-	printf("vecteur x:\n");
-	affichageVect(x, &info);
+	//prodMatVect(A, b, x, &info);
+	//printf("vecteur x:\n");
+	//affichageVect(x, &info);
 
-	printf("Matrice LUi\n");
+	//printf("Matrice LUi\n");
 	ilup(A, level, LUi, &info);
 	//affichageMat(LUi, &info);
 	affichageMatSpy(LUi,&info);
@@ -58,14 +58,14 @@ int main(int argc, char **argv)
 	runtime = diff_time(timer_end, timer_start);
 	print_time(&info, runtime);
 
-	MPI_Finalize();
-
 	/* *** LIBERATION DES RESSOURCES *** */
 	free(A);
 	free(b);
 	free(level);
 	free(LUi);
 	free(x);
+	
+	MPI_Finalize();
 	
 	return 0;
 }

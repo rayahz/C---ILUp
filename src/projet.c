@@ -52,8 +52,8 @@ void affichageMatSpy(double **M, struct info_t *info)
 		{
 			for(j = 0; j < n; j++)
 				if(fabs(A[i][j]) > DBL_EPSILON)
-					printf("*  ");
-				else printf("   ");
+					fputs("* ", stdout);
+				else fputs("  ", stdout);
 			printf("\n");
 		}
 		printf("\n");
@@ -128,16 +128,16 @@ void poisson2D(double **A, struct info_t *info)
 void ilup(double **A, int **level, double **LUi, struct info_t *info)
 {
 	int i, j, k;
-	int *map = malloc(n * (sizeof * map));
 	
-	for(i = 0; i < n; i++)
-		map[i] = (i) % (info->nproc);
-	
+	// initialisation de la matrice de remplissage 
+	// si A(i,j) != 0
+		// alors lev(i,j) = 0
+		// sinon lev(i,j) = inf
 	for(i = 0; i < n; i++)
 	{
-		for(j = 0; j < n; j++)
+		for(j = 0; j < info->nloc; j++)
 		{
-			if((fabs(A[i][j]) > DBL_EPSILON) || (i == j))
+			if((fabs(A[i][j]) > DBL_EPSILON) || (i == (j+info->rang*info->nloc)))
 				level[i][j] = 0;
 			else level[i][j] = inf;
 
@@ -146,45 +146,69 @@ void ilup(double **A, int **level, double **LUi, struct info_t *info)
 		}
 	}
 	
-	for(k = 0; k < n; k++)
+	int deb = info->ideb;
+	if(info->rang==0)
+		deb++;
+		
+	for(i = deb; i < info->ifin; i++)
 	{
-		if(map[k] == (info->rang))
-		{ 
-			for(i = k+1; i < n; i++)
+		for(k = 0; k <= i-1; k++)
+		{
+			if(level[i][k-info->nloc*info->rang] <= p)
 			{
-				if(level[i][k] <= p)
-					LUi[i][k] = LUi[i][k] / LUi[k][k];
+				LUi[i][k-info->nloc*info->rang] /= LUi[k][k-info->nloc*info->rang]; // calcul
+			
+				for(j = k +1; j < info->nloc; j++)	
+				{
+					LUi[i][j] -= LUi[i][k] * LUi[k][j]; // calcul
+					
+					// remplissage de la matrice de niveau de remplissage
+						// factorisation symbolique : Le but de cette étape est de calculer la structure de remplissage des facteurs avant l’étape de factorisation numérique.
+					if(fabs(LUi[i][j]) > DBL_EPSILON)
+						level[i][j] = min(level[i][j], level[i][k] + level[k][j] + 1);
+				}
 			}
 		}
 		
-		MPI_Bcast (&A[k][k], n-k, MPI_DOUBLE, map[k], MPI_COMM_WORLD);
-
-		for(j = k + 1; j < n; j++)
+		// tous les elements dont le niveau de remplissage est superieur à p sont remplaces par 0
+		for(j = 0 ; j < info->nloc; j++)
 		{
-			if(map[j] == (info->rang))
-			{
-				for(i = k + 1; i < n; i++)
-				{
-					if(level[i][k] <= p)
-					{
-						LUi[i][j] = LUi[i][j] - LUi[i][k] * LUi[k][j]; 
+			if(level[i][j] > p)
+				LUi[i][j] = 0.0;
+		}
+	}
+	
+	/*for(k = 0; k < info->nloc; k++)
+	{
+		for(i = k+1; i < n; i++)
+		{
+			if(level[i][k] <= p)
+				LUi[i][k] = LUi[i][k] / LUi[k+info->nloc*info->rang][k];
+		}
 
-						if(fabs(LUi[i][j]) > DBL_EPSILON)
-							level[i][j] = min(level[i][j], level[i][k] + level[k][j] + 1);
-					}
+		for(j = k + 1; j < info->nloc; j++)
+		{
+			for(i = k +1 ; i < n; i++)
+			{
+				if(level[i][k] <= p)
+				{
+					LUi[i][j] -= LUi[i][k] * LUi[k][j]; 
+
+					if(fabs(LUi[i][j]) > DBL_EPSILON)
+						level[i][j] = min(level[i][j], level[i][k] + level[k][j] + 1);
 				}
 			}
 		}
 	}
 	
-	for(j = 0 ; j < n; j++)	
+	for(j = 0 ; j < info->nloc; j++)
 	{
 		for(i = 0 ; i < n; i++) 
 		{
 			if(level[i][j] > p)
 				LUi[i][j] = 0.0;
 		}
-	}
+	}*/
 }
 
 /*
@@ -594,12 +618,18 @@ void print_time(struct info_t *info, double runtime)
 	int i;
 	double runtime_in_seconds = runtime / 1000000;
 	double runtime_t[info->nproc];
+	double max = 0.0;
 
 	MPI_Gather(&runtime_in_seconds, 1, MPI_DOUBLE, &runtime_t, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	
 	if(info->rang == 0)
 	{
 		for(i = 0; i < info->nproc; i++)
-			fprintf(stderr, "[%d] Temps de l'execution : %.2f s\n", i, runtime_t[i]);
+		{
+			fprintf(stderr, "[%d] Temps de l'execution : %e s\n", i, runtime_t[i]);
+			//if(max < runtime_t[i])
+				//max = runtime_t[i];
+		}
+		//printf("%d \t %e\n", info->nproc, max);
 	}
 }
