@@ -278,16 +278,17 @@ double norme(double *a, int N)
 */
 int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 {
-	int iter = 0, i, j, maxiter = max(100.0, sqrt(n));
+	int iterG = 0, iterL = 0, i, j, maxiter = max(100.0, sqrt(n));
 	double alpha, beta, M, Mold, bnrm2 = norme(b, info->nloc);
 	double *Ap, *Br, *r, *v;
 
-	Ap = (double*) malloc(n * sizeof(double));
-	Br = (double*) malloc(n * sizeof(double));
-	r = (double*) malloc(n * sizeof(double));
-	v = (double*) calloc(n, sizeof(double));
+	Ap = (double*) malloc(info->nloc * sizeof(double));
+	Br = (double*) malloc(info->nloc * sizeof(double));
+	r = (double*) malloc(info->nloc * sizeof(double));
+	v = (double*) calloc(info->nloc, sizeof(double));
 
-	for(i = 0; i < n; i++)
+	#pragma omp parallel for schedule(static)
+	for(i = 0; i < info->nloc; i++)
 		r[i] = b[i];
 
 	prodMatVect(B, r, v, info);
@@ -296,17 +297,26 @@ int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 	if(bnrm2 == 0.0) 
 		bnrm2 = 1.0;
 
-	while(((norme(r, info->nloc) / bnrm2) > DBL_EPSILON) && (iter < maxiter))
+	while(((norme(r, info->nloc) / bnrm2) > DBL_EPSILON) && (iterG < maxiter))
 	{
-		iter++;
-
-		for(i = 0; i < n; i++)
+		// A VIRER QUAND CA MARCHE, DE ICI
+		iterL++;
+		if(info->rang == 0)
+			iterG = iterL;
+		MPI_Bcast(&iterG, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		if(info->rang != 0 && iterG != iterL)
+			MPI_Abort(MPI_COMM_WORLD, 1);
+		// A DE LA
+		
+		#pragma omp parallel for schedule(static)
+		for(i = 0; i < info->nloc; i++)
 			Ap[i] = 0.0;
 			
 		prodMatVect(A, v, Ap, info);
 		alpha = M / prodScal(v, Ap, info->nloc);
 
-		for(i = 0; i < n; i++)
+		#pragma omp parallel for schedule(static)
+		for(i = 0; i < info->nloc; i++)
 		{
 			x[i] += alpha * v[i];
 			r[i] -= alpha * Ap[i];
@@ -314,14 +324,16 @@ int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 
 		Mold = M;
 
-		for(i = 0; i < n; i++)
+		#pragma omp parallel for schedule(static)
+		for(i = 0; i < info->nloc; i++)
 			Br[i] = 0.0;
 			
 		prodMatVect(B, r, Br, info);
 		M = prodScal(r, Br, info->nloc);
 		beta = M / Mold;
 
-		for(i = 0; i < n; i++)
+		#pragma omp parallel for schedule(static)
+		for(i = 0; i < info->nloc; i++)
 			v[i] = Br[i] + beta * v[i];
 	}
 	
@@ -329,8 +341,7 @@ int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 	free(Br);
 	free(r);
 	free(v);
-
-	return iter;
+	return iterG;
 }
 
 /*
@@ -427,22 +438,24 @@ int CGR(double **A, double *x, double *b, struct info_t *info)
 	double alpha, bnrm2 = norme(b, info->nloc);
 	double *Ap, *Ar, *beta, *r, **v;
 	
-	Ap = (double*) malloc(n * sizeof(double));
-	Ar = (double*) malloc(n * sizeof(double));
-	r = (double*) calloc(n, sizeof(double));
-	v = (double**) calloc(n, sizeof(double*));
+	Ap = (double*) malloc(info->nloc * sizeof(double));
+	Ar = (double*) malloc(info->nloc * sizeof(double));
+	r = (double*) calloc(info->nloc, sizeof(double));
+	v = (double**) calloc(maxiter + 1, sizeof(double*));
+	beta = (double*) malloc(maxiter * sizeof(double));
 	
-	for(i = 0; i < n; i++)
-		v[i] = (double*) calloc(maxiter, sizeof(double));
+	for(i = 0; i <= maxiter; i++)
+		v[i] = (double*) calloc(info->nloc, sizeof(double));
 
 	prodMatVect(A, x, r, info);
 	
-	for(i = 0; i < n; i++)
+	#pragma omp parallel for schedule(static)
+	for(i = 0; i < info->nloc; i++)
 	{
 		r[i] = b[i] - r[i];
-		v[i][0] = r[i];
+		v[0][i] = r[i];
 	}
-
+	
 	if(bnrm2 == 0.0) 
 		bnrm2 = 1.0;
 
@@ -450,52 +463,51 @@ int CGR(double **A, double *x, double *b, struct info_t *info)
 	{
 		iter++;
 
-		for(i = 0; i < n; i++)
-		{
+		#pragma omp parallel for schedule(static)
+		for(i = 0; i < info->nloc; i++)
 			Ap[i] = 0.0;
-			for(j = 0; j < n; j++)
-				Ap[i] += A[i][j] * v[j][iter - 1];
-		}
-		
+			
+		prodMatVect(A, v[iter-1], Ap, info);
 		alpha = prodScal(r, Ap, info->nloc) / prodScal(Ap, Ap, info->nloc);
 		
-		for(i = 0; i < n; i++)
+		#pragma omp parallel for schedule(static)
+		for(i = 0; i < info->nloc; i++)
 		{
-			x[i] += alpha * v[i][iter - 1];
+			x[i] += alpha * v[iter - 1][i];
 			r[i] -= alpha * Ap[i];
 		}
-
-		beta = (double*) malloc(iter * sizeof(double));
 		
+		#pragma omp parallel for schedule(static)
 		for(k = 0; k < iter; k++)
 		{
-			for(i = 0; i < n; i++)
+			for(i = 0; i < info->nloc; i++)
 			{
 				Ap[i] = 0.0;
 				Ar[i] = 0.0;
-				for(j = 0; j < n; j++)
-					Ap[i] += A[i][j] * v[j][k];
-				prodMatVect(A, r, Ar, info);
 			}
-			beta[k] = (-1) * prodScal(Ar, Ap, info->nloc) / prodScal(Ap, Ap, info->nloc);
+			
+			prodMatVect(A, v[k], Ap, info);
+			prodMatVect(A, r, Ar, info);
+			beta[k] = - prodScal(Ar, Ap, info->nloc) / prodScal(Ap, Ap, info->nloc);
 		}
 		
+		#pragma omp parallel for schedule(static)
 		for(k = 0; k < iter; k++)
 		{
 			for(i = 0; i < n; i++)
-				v[i][iter] += beta[k] * v[i][k];
+				v[iter][i] += beta[k] * v[k][i];
 		}
 		
-		for(i = 0; i < n; i++)
-			v[i][iter] += r[i];
-
-		free(beta);
+		#pragma omp parallel for schedule(static)
+		for(i = 0; i < info->nloc; i++)
+			v[iter][i] += r[i];
 	}
 	
 	free(Ap);
 	free(Ar);
 	free(r);
 	free(v);
+	free(beta);
 	
 	return iter;
 }
@@ -510,7 +522,7 @@ void prodMatVect(double **m, double *v, double *r, struct info_t *info)
 		tmp[i] = prodScal(m[i], v, info->nloc);
 
 	MPI_Allreduce(tmp, tmp2, n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-	MPI_Scatter(tmp2, info->nloc, MPI_DOUBLE, r, info->nloc, MPI_DOUBLE, 0,  MPI_COMM_WORLD);
+	MPI_Scatter(tmp2, info->nloc, MPI_DOUBLE, r, info->nloc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 }
 
 double prodScal(double *x, double *y, int N)

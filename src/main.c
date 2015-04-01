@@ -51,9 +51,25 @@ int main(int argc, char **argv)
 	//printf("Matrice LUi\n");
 	ilup(A, level, LUi, &info);
 	//affichageMat(LUi, &info);
-	affichageMatSpy(LUi,&info);
+	//affichageMatSpy(LUi,&info);
 
-	timer_end = get_timer();
+	//vecteur_b(b, &info);
+	//affichageVect(b);
+	
+	//printf("Ax = b (PCG)\n");
+	//PCG(A, x, b, LUi, &info);
+	//affichageVect(x);
+
+	//printf("Vecteur residu issu du PCG\n");
+	//affichageVect(residu);
+	
+	//printf("CGR\n");
+	CGR(LUi, x, b, &info);
+	
+	//printf("x \n");
+	affichageVect(x, &info);
+	
+	//timer_end = get_timer();
 
 	runtime = diff_time(timer_end, timer_start);
 	print_time(&info, runtime);
