@@ -14,22 +14,22 @@
 */
 void affichageMat(double **M, struct info_t *info)
 {
-	int i, j;
-	double A[n][n];
+	int i, j, k;
 
-	for(i = 0; i < n; i++)
-		MPI_Gather(M[i], info->nloc, MPI_DOUBLE, A[i] + info->rang * info->nloc, info->nloc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-	if(info->rang == 0)
+	for(k = 0; k < info->nproc; k++)
 	{
-		for(i = 0; i < n; i++)
+		MPI_Barrier(MPI_COMM_WORLD);
+		if(info->rang == k)
 		{
-			for(j = 0; j < n; j++)
-				printf("%.2lf   ", A[i][j]);
-			printf("\n");
+			for(i = 0; i < info->nloc; i++)
+			{
+				for(j = 0; j < n; j++)
+					printf("%.2lf   ", M[i][j]);
+				printf("\n");
+			}
 		}
-		printf("\n");
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 /*
@@ -40,24 +40,24 @@ void affichageMat(double **M, struct info_t *info)
 */
 void affichageMatSpy(double **M, struct info_t *info)
 {
-	int i, j;
-	double A[n][n];
-
-	for(i = 0; i < n; i++)
-		MPI_Gather(M[i], info->nloc, MPI_DOUBLE, A[i] + info->rang * info->nloc, info->nloc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-	if(info->rang == 0)
+	int i, j, k;
+	
+	for(k = 0; k < info->nproc; k++)
 	{
-		for(i = 0; i < n; i++)
+		MPI_Barrier(MPI_COMM_WORLD);
+		if(info->rang == k)
 		{
-			for(j = 0; j < n; j++)
-				if(fabs(A[i][j]) > DBL_EPSILON)
-					fputs("* ", stdout);
-				else fputs("  ", stdout);
-			printf("\n");
+			for(i = 0; i < info->nloc; i++)
+			{
+				for(j = 0; j < n; j++)
+					if(fabs(M[i][j]) > DBL_EPSILON)
+						fputs("* ", stdout);
+					else fputs("  ", stdout);
+				printf("\n");
+			}
 		}
-		printf("\n");
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 /*
@@ -69,14 +69,11 @@ void affichageMatSpy(double **M, struct info_t *info)
 void affichageVect(double *V, struct info_t *info)
 {
 	int i;
-	double A[n];
-
-	MPI_Gather(V, info->nloc, MPI_DOUBLE, A + info->rang * info->nloc, info->nloc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 	if(info->rang == 0)
 	{
 		for(i = 0; i < n; i++)
-			printf("%.2lf   ",A[i]);
+			printf("%.2lf   ", V[i]);
 		printf("\n\n");
 	}
 }
@@ -92,31 +89,31 @@ void poisson2D(double **A, struct info_t *info)
 	int i, v1 = 1, v2 = 0, v3 = 0;
 
 	if(info->rang == 0)
+	{
 		v1 = 0;
-		
+		v3 = nx;
+	}
+	
 	if(info->rang == info->nproc - 1)
 		v2 = 1;
+
+//	if((info->ifin - 1 - nx) >= 0)
+//		v3 = nx;
 		
-	if((info->ifin - 1 - nx) >= 0)
-		v3 = nx;
+	for(i = 0; i < info->nloc; i++)
+		A[i][i + info->nloc * info->rang] = 4.0;
+	
+	for(i = 0; i < info->nloc - v2; i++)
+		A[i][i + info->ideb + 1] = -1.0;
+	
+	for(i = 0; i < info->nloc; i++)
+		A[i][i + nx + info->ideb] = -1.0;
+			
+	for(i = 0; i < info->nloc - 1 + v1; i++)
+		A[i + 1 - v1][i + info->ideb - v1] = -1.0;
 
-	#pragma omp parallel for schedule(static)
-	for(i = info->ideb; i < info->ifin; i++){
-		A[i][i - info->nloc * info->rang] = 4.0;
-		A[i - v1][i-info->nloc * info->rang + 1 - v1] = -1.0;
-	}
-
-	#pragma omp parallel for schedule(static)
-	for(i = info->ideb; i < info->ifin - v2; i++)
-		A[i + 1][i - info->nloc * info->rang] = -1.0;
-
-	#pragma omp parallel for schedule(static)
-	for(i = info->ifin-1; (i >= info->ideb) && ((i - v3) >= 0); i--)
-		A[i - v3][i - info->nloc * info->rang + nx - v3] = -1.0;
-
-	#pragma omp parallel for schedule(static)
-	for(i = info->ideb; (i < info->ifin) && (i < (n - nx)); i++)
-		A[i + nx][i - info->nloc * info->rang] = -1.0;
+	for(i = 0; i < info->nloc - v3; i++)
+		A[i+v3][i + info->ideb + v3 -nx] = -1.0;
 }
 
 /*
@@ -125,9 +122,14 @@ void poisson2D(double **A, struct info_t *info)
   IN : matrice initiale, matrice de niveaux de remplissage et matrice LUi 
   OUT : matrice LUi sous forme LU incomplet et matrice lev contenant le niveau de remplissage pour chaque element
 */
-void ilup(double **A, int **level, double **LUi, struct info_t *info)
+void ilup(double **A, double **LUi, struct info_t *info)
 {
 	int i, j, k;
+	int **level;
+	
+	level = (int**) malloc(n * sizeof(int*));
+	for(i = 0; i < n; i++)
+		level[i] = (int*) malloc(info->nloc * sizeof(int));
 	
 	// initialisation de la matrice de remplissage 
 	// si A(i,j) != 0
@@ -209,6 +211,8 @@ void ilup(double **A, int **level, double **LUi, struct info_t *info)
 				LUi[i][j] = 0.0;
 		}
 	}*/
+	
+	free(level);
 }
 
 /*
@@ -352,24 +356,18 @@ int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 */
 void vecteur_b(double *b, struct info_t *info)
 {
-	int i, j;
-
-	#pragma omp parallel for schedule(static)
-	for(i = 0, j = info->ideb; (i < info->nloc) && (j < n / 2); i++, j++)
-		b[i] = (double)j;
-
-	if(n / 2 < info->ifin)
+	int i;
+	
+	for(i = 0; i < n / 2; i++)
+		b[i] = (double)i;
+		
+	if(n % 2 == 0)
 	{
-		if(n / 2 >= info->ideb)
-		{
-			#pragma omp parallel for schedule(static)
-			for(i = n / 2 - info->ideb, j = n / 2 - 1; i < info->nloc; i++, j--)
-				b[i] = (double)j;
-		}else{
-			#pragma omp parallel for schedule(static)
-			for(i = 0, j = n - info->nloc * info->rang - 1; i < info->nloc; i++, j--)
-				b[i] = (double)j;
-		}
+		for(i = n / 2 - 1; i >= 0; i--)
+			b[n - i - 1] = (double)i;
+	}else{
+		for(i = n / 2; i >= 0; i--)
+			b[n - i - 1] = (double)i;
 	}
 }
 
@@ -637,11 +635,6 @@ void print_time(struct info_t *info, double runtime)
 	if(info->rang == 0)
 	{
 		for(i = 0; i < info->nproc; i++)
-		{
 			fprintf(stderr, "[%d] Temps de l'execution : %e s\n", i, runtime_t[i]);
-			//if(max < runtime_t[i])
-				//max = runtime_t[i];
-		}
-		//printf("%d \t %e\n", info->nproc, max);
 	}
 }

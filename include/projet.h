@@ -17,8 +17,8 @@
 
 #define min(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define max(X, Y) (((X) < (Y)) ? (Y) : (X))
-#define nx 8
-#define ny 4
+#define nx 4
+#define ny 3
 #define n (nx*ny)
 #define p 4
 #define inf 1024
@@ -66,7 +66,7 @@ void prodMatVect(double **, double *, double *, struct info_t *);
 int PCG(double**, double*, double*, double**, struct info_t *); 
 
 // permet de calculer de la factorisation lu incompléte au niveau p
-void ilup(double**, int**, double**, struct info_t *); 
+void ilup(double**, double**, struct info_t *); 
 
 // permet d'effectuer la factorisation LU complete
 void LUfact(double**, double**);

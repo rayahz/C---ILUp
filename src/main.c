@@ -10,7 +10,6 @@ int main(int argc, char **argv)
 {
 	/* *** DECLARATION DES VARIABLES *** */
 	int i;
-	int **level;
 	double **A, *b, **LUi, *x;
 	double runtime, timer_start, timer_end;
 	struct info_t info;
@@ -18,18 +17,16 @@ int main(int argc, char **argv)
 	MPI_initialize(argc, argv, &info);
 	
 	/* *** INITIALISATION DES VARIABLES *** */
-	level = (int**) malloc(n * sizeof(int*));
-	A = (double**) malloc(n * sizeof(double*));
-	LUi = (double**) malloc(n * sizeof(double*));
-	b = (double*) malloc(info.nloc * sizeof(double));
-	x = (double*) calloc(info.nloc, sizeof(double));
+	A = (double**) malloc(info.nloc * sizeof(double*));
+	LUi = (double**) malloc(info.nloc * sizeof(double*));
+	b = (double*) malloc(n * sizeof(double));
+	x = (double*) calloc(n, sizeof(double));
 
 	#pragma omp parallel for schedule(static)
-	for(i = 0; i < n; i++)
+	for(i = 0; i < info.nloc; i++)
 	{
-		level[i] = (int*) malloc(info.nloc * sizeof(int));
-		A[i] = (double*) malloc(info.nloc * sizeof(double));
-		LUi[i] = (double*) malloc(info.nloc * sizeof(double));
+		A[i] = (double*) malloc(n * sizeof(double));
+		LUi[i] = (double*) malloc(n * sizeof(double));
 	}
 
 	/* *** CORPS DU PROGRAMME PRINCIPAL *** */	
@@ -38,10 +35,10 @@ int main(int argc, char **argv)
 	//printf("Matrice A:\n");
 	poisson2D(A, &info);
 	//affichageMat(A, &info);
-	//affichageMatSpy(A, &info);
-
+	affichageMatSpy(A, &info);
+	
 	//printf("Vecteur b:\n");
-	vecteur_b(b, &info);
+	//vecteur_b(b, &info);
 	//affichageVect(b, &info);
 
 	//prodMatVect(A, b, x, &info);
@@ -49,12 +46,9 @@ int main(int argc, char **argv)
 	//affichageVect(x, &info);
 
 	//printf("Matrice LUi\n");
-	ilup(A, level, LUi, &info);
+	//ilup(A, LUi, &info);
 	//affichageMat(LUi, &info);
 	//affichageMatSpy(LUi,&info);
-
-	//vecteur_b(b, &info);
-	//affichageVect(b);
 	
 	//printf("Ax = b (PCG)\n");
 	//PCG(A, x, b, LUi, &info);
@@ -64,20 +58,18 @@ int main(int argc, char **argv)
 	//affichageVect(residu);
 	
 	//printf("CGR\n");
-	CGR(LUi, x, b, &info);
+	//CGR(LUi, x, b, &info);
 	
 	//printf("x \n");
-	affichageVect(x, &info);
+	//affichageVect(x, &info);
 	
-	//timer_end = get_timer();
-
+	timer_end = get_timer();
 	runtime = diff_time(timer_end, timer_start);
 	print_time(&info, runtime);
 
 	/* *** LIBERATION DES RESSOURCES *** */
 	free(A);
 	free(b);
-	free(level);
 	free(LUi);
 	free(x);
 	
