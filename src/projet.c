@@ -27,6 +27,9 @@ void affichageMat(double **M, struct info_t *info)
 					printf("%.2lf   ", M[i][j]);
 				printf("\n");
 			}
+			
+			if(info->rang == info->nproc - 1)
+				printf("\n");
 		}
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -55,8 +58,12 @@ void affichageMatSpy(double **M, struct info_t *info)
 					else fputs("  ", stdout);
 				printf("\n");
 			}
+			
+			if(info->rang == info->nproc - 1)
+				printf("\n");
 		}
 	}
+	
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
@@ -86,34 +93,44 @@ void affichageVect(double *V, struct info_t *info)
 */
 void poisson2D(double **A, struct info_t *info)
 {
-	int i, v1 = 1, v2 = 0, v3 = 0;
+int i, v1 = 1, v2 = 0, v3 = nx, v4 = 0;
 
 	if(info->rang == 0)
 	{
 		v1 = 0;
-		v3 = nx;
+		v3 = 0;
 	}
-	
-	if(info->rang == info->nproc - 1)
-		v2 = 1;
 
-//	if((info->ifin - 1 - nx) >= 0)
-//		v3 = nx;
-		
+	if(info->rang == info->nproc - 1)
+	{
+		v2 = 1;
+		v4 = nx;
+	}
+
+	// superdiagonale inférieure
+	#pragma omp parallel for schedule(static)
+	for(i = nx - v3; i < info->nloc; i++)
+		A[i][i + info->ideb - nx] = -1.0;
+
+	// diagonale inférieure
+	#pragma omp parallel for schedule(static)
+	for(i = 1 - v1; i < info->nloc; i++)
+		A[i][i + info->ideb - 1] = -1.0;
+
+	// diagonale principale
+	#pragma omp parallel for schedule(static)
 	for(i = 0; i < info->nloc; i++)
-		A[i][i + info->nloc * info->rang] = 4.0;
-	
+		A[i][i + info->ideb] = 4.0;
+
+	// diagonale supérieure
+	#pragma omp parallel for schedule(static)
 	for(i = 0; i < info->nloc - v2; i++)
 		A[i][i + info->ideb + 1] = -1.0;
-	
-	for(i = 0; i < info->nloc; i++)
-		A[i][i + nx + info->ideb] = -1.0;
-			
-	for(i = 0; i < info->nloc - 1 + v1; i++)
-		A[i + 1 - v1][i + info->ideb - v1] = -1.0;
 
-	for(i = 0; i < info->nloc - v3; i++)
-		A[i+v3][i + info->ideb + v3 -nx] = -1.0;
+	// superdiagonale supérieure
+	#pragma omp parallel for schedule(static)
+	for(i = 0; i < info->nloc - v4; i++)
+		A[i][i + info->ideb + nx] = -1.0;
 }
 
 /*
@@ -250,9 +267,9 @@ void ilup(double **A, double **LUi, struct info_t *info)
   OUT : /
   RETOUR : scalaire contenant la norme du vecteur
 */
-double norme(double *a, int N)
+double norme(double *a, struct info_t *info)
 {
-	return sqrt(fabs(prodScal(a, a, N)));
+	return sqrt(fabs(prodScal(a, a, info)));
 }
 
 /*
@@ -283,7 +300,7 @@ double norme(double *a, int N)
 int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 {
 	int iterG = 0, iterL = 0, i, j, maxiter = max(100.0, sqrt(n));
-	double alpha, beta, M, Mold, bnrm2 = norme(b, info->nloc);
+	double alpha, beta, M, Mold, bnrm2 = norme(b, info);
 	double *Ap, *Br, *r, *v;
 
 	Ap = (double*) malloc(info->nloc * sizeof(double));
@@ -296,12 +313,12 @@ int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 		r[i] = b[i];
 
 	prodMatVect(B, r, v, info);
-	M = prodScal(r, v, info->nloc);
+	M = prodScal(r, v, info);
 
 	if(bnrm2 == 0.0) 
 		bnrm2 = 1.0;
 
-	while(((norme(r, info->nloc) / bnrm2) > DBL_EPSILON) && (iterG < maxiter))
+	while(((norme(r, info) / bnrm2) > DBL_EPSILON) && (iterG < maxiter))
 	{
 		// A VIRER QUAND CA MARCHE, DE ICI
 		iterL++;
@@ -317,7 +334,7 @@ int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 			Ap[i] = 0.0;
 			
 		prodMatVect(A, v, Ap, info);
-		alpha = M / prodScal(v, Ap, info->nloc);
+		alpha = M / prodScal(v, Ap, info);
 
 		#pragma omp parallel for schedule(static)
 		for(i = 0; i < info->nloc; i++)
@@ -333,7 +350,7 @@ int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 			Br[i] = 0.0;
 			
 		prodMatVect(B, r, Br, info);
-		M = prodScal(r, Br, info->nloc);
+		M = prodScal(r, Br, info);
 		beta = M / Mold;
 
 		#pragma omp parallel for schedule(static)
@@ -356,18 +373,28 @@ int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 */
 void vecteur_b(double *b, struct info_t *info)
 {
-	int i;
-	
-	for(i = 0; i < n / 2; i++)
-		b[i] = (double)i;
-		
-	if(n % 2 == 0)
+	int i, j;
+
+	#pragma omp parallel for schedule(static)
+	for(i = 0; (i < info->nloc) && ((i + info->ideb) < n / 2); i++)
+		b[i] = (double)(info->ideb + i);
+
+	if(n / 2 < info->ifin)
 	{
-		for(i = n / 2 - 1; i >= 0; i--)
-			b[n - i - 1] = (double)i;
-	}else{
-		for(i = n / 2; i >= 0; i--)
-			b[n - i - 1] = (double)i;
+		if(n / 2 > info->ideb)
+		{
+			if(n % 2 == 0)
+				j = n / 2 - 1;
+			else j = n / 2;
+			
+			#pragma omp parallel for schedule(static)
+			for(i = info->nloc / 2; i < info->nloc; i++, j--)
+				b[i] = (double)j;
+		}else{
+			#pragma omp parallel for schedule(static)
+			for(i = 0, j = n - info->ideb - 1; i < info->nloc; i++, j--)
+				b[i] = (double)j;
+		}
 	}
 }
 
@@ -433,7 +460,7 @@ void matrixMarket(double **A, char *nom)
 int CGR(double **A, double *x, double *b, struct info_t *info)
 {
 	int iter = 0, i, j, k, maxiter = max(100.0, sqrt(n));
-	double alpha, bnrm2 = norme(b, info->nloc);
+	double alpha, bnrm2 = norme(b, info);
 	double *Ap, *Ar, *beta, *r, **v;
 	
 	Ap = (double*) malloc(info->nloc * sizeof(double));
@@ -457,7 +484,7 @@ int CGR(double **A, double *x, double *b, struct info_t *info)
 	if(bnrm2 == 0.0) 
 		bnrm2 = 1.0;
 
-	while(((norme(r, info->nloc) / bnrm2) > DBL_EPSILON) && (iter < maxiter))
+	while(((norme(r, info) / bnrm2) > DBL_EPSILON) && (iter < maxiter))
 	{
 		iter++;
 
@@ -466,7 +493,7 @@ int CGR(double **A, double *x, double *b, struct info_t *info)
 			Ap[i] = 0.0;
 			
 		prodMatVect(A, v[iter-1], Ap, info);
-		alpha = prodScal(r, Ap, info->nloc) / prodScal(Ap, Ap, info->nloc);
+		alpha = prodScal(r, Ap, info) / prodScal(Ap, Ap, info);
 		
 		#pragma omp parallel for schedule(static)
 		for(i = 0; i < info->nloc; i++)
@@ -486,7 +513,7 @@ int CGR(double **A, double *x, double *b, struct info_t *info)
 			
 			prodMatVect(A, v[k], Ap, info);
 			prodMatVect(A, r, Ar, info);
-			beta[k] = - prodScal(Ar, Ap, info->nloc) / prodScal(Ap, Ap, info->nloc);
+			beta[k] = - prodScal(Ar, Ap, info) / prodScal(Ap, Ap, info);
 		}
 		
 		#pragma omp parallel for schedule(static)
@@ -512,24 +539,24 @@ int CGR(double **A, double *x, double *b, struct info_t *info)
 
 void prodMatVect(double **m, double *v, double *r, struct info_t *info)
 {
-	int i;
-	double tmp[n], tmp2[n];
+	int i, j;
+	double tmp[n];
 
-	#pragma omp parallel for schedule(static) private(tmp)
-	for(i = 0; i < n; i++)
-		tmp[i] = prodScal(m[i], v, info->nloc);
+	MPI_Allgather(v, info->nloc, MPI_DOUBLE, tmp, info->nloc, MPI_DOUBLE, MPI_COMM_WORLD);
 
-	MPI_Allreduce(tmp, tmp2, n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-	MPI_Scatter(tmp2, info->nloc, MPI_DOUBLE, r, info->nloc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	#pragma omp parallel for schedule(static) private(j, r)
+	for(i = 0; i < info->nloc; i++)
+		for(j = 0; j < n; j++)
+			r[i] += m[i][j] * tmp[j];
 }
 
-double prodScal(double *x, double *y, int N)
+double prodScal(double *x, double *y, struct info_t *info)
 {
 	int i;
 	double res_loc = 0.0, res_glob;
 
 	#pragma omp parallel for schedule(static) reduction(+:res_loc)
-	for(i = 0; i < N; i++)
+	for(i = 0; i < info->nloc; i++)
 		res_loc += x[i] * y[i];
 
 	MPI_Reduce(&res_loc, &res_glob, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);

@@ -35,15 +35,15 @@ int main(int argc, char **argv)
 	//printf("Matrice A:\n");
 	poisson2D(A, &info);
 	//affichageMat(A, &info);
-	affichageMatSpy(A, &info);
+	//affichageMatSpy(A, &info);
 	
 	//printf("Vecteur b:\n");
-	//vecteur_b(b, &info);
+	vecteur_b(b, &info);
 	//affichageVect(b, &info);
 
-	//prodMatVect(A, b, x, &info);
+	prodMatVect(A, b, x, &info);
 	//printf("vecteur x:\n");
-	//affichageVect(x, &info);
+	affichageVect(x, &info);
 
 	//printf("Matrice LUi\n");
 	//ilup(A, LUi, &info);

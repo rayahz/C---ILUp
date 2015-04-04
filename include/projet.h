@@ -17,8 +17,8 @@
 
 #define min(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define max(X, Y) (((X) < (Y)) ? (Y) : (X))
-#define nx 4
-#define ny 3
+#define nx 3
+#define ny 2
 #define n (nx*ny)
 #define p 4
 #define inf 1024
@@ -48,13 +48,13 @@ void affichageVect(double*, struct info_t *);
 /* *** PROCEDURES DE CALCUL *** */
 //////////////////////////////////
 // permet de calculer la norme d'un vecteur
-double norme(double*, int); 
+double norme(double*, struct info_t *); 
 
 // permet d'effectuer le produit d'un vecteur transpose avec une matrice puis avec le vecteur (v' * a * v)
 double produitT(double*, double**); 
 
 // permet de calculer le produit scalaire d'un vecteur
-double prodScal(double *, double *, int);
+double prodScal(double *, double *, struct info_t *);
 
 // permet de calculer le produit d'une matrice avec un vecteur
 void prodMatVect(double **, double *, double *, struct info_t *);
