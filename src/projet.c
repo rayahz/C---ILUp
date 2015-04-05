@@ -7,9 +7,64 @@
 #include <projet.h>
 
 /*
+  PROCEDURE : ecrireFichier
+  DESCRIPTION : permet d'ecrire dans un fichier de sortie les données du programme
+  IN : structure info_t, nb iteration PCG, nb iteration CGR et vecteur resultat
+  OUT : /
+*/
+void ecrireFichier(struct info_t *info, int x, int y, double *V)
+{
+	FILE* fichier = NULL;
+	char buffer1[256], buffer2[256];
+	int nbthread = omp_get_num_threads(), i;
+	double A[n];
+	
+	time_t timestamp = time(NULL);
+	strftime(buffer1, sizeof(buffer1), "%A %d %B %Y - %X", localtime(&timestamp));
+	strftime(buffer2, sizeof(buffer2), "%d%m%Y_%H%M%S.txt", localtime(&timestamp));
+	
+	fichier = fopen(buffer2, "w");
+
+	if(fichier != NULL)
+	{
+		fprintf(fichier, "#######################################\n");
+		fprintf(fichier, "### %s ###\n", buffer1);
+		fprintf(fichier, "#######################################\n");
+		fprintf(fichier, "nx = %d\n", nx);
+		fprintf(fichier, "ny = %d\n", ny);
+		fprintf(fichier, "n = nx * ny = %d \n", n);
+		fprintf(fichier, "p = %d\n\n", p);
+		
+		#pragma omp parallel
+		{
+			nbthread++;
+		}
+
+		fprintf(fichier, "Nombre de processus MPI : %d\n", info->nproc);
+		fprintf(fichier, "Nombre de thread : %d\n", nbthread);
+		fprintf(fichier, "Temps d'execution totale : %e\n\n", info->temps);
+		
+		fprintf(fichier, "Nombre d'iteration PCG : %d\n", x);
+		fprintf(fichier, "Nombre d'iteration CGR : %d\n\n", y);
+		
+		fprintf(fichier, "Vecteur resultat x\n");
+
+		MPI_Gather(V, info->nloc, MPI_DOUBLE, A + info->rang * info->nloc, info->nloc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+		if(info->rang == 0)
+		{
+			for(i = 0; i < n; i++)
+				fprintf(fichier, "%.2lf\t", A[i]);
+			fprintf(fichier, "\n\n");
+		}
+		fclose(fichier);
+	}
+}
+
+/*
   PROCEDURE : affichageMat
-  DESCRIPTION : permet l'affichage de la matrice sur la sortie standard
-  IN : matrice
+  DESCRIPTION : affichage de la matrice sur la sortie standard
+  IN : matrice et structure info_t
   OUT : /
 */
 void affichageMat(double **M, struct info_t *info)
@@ -24,12 +79,12 @@ void affichageMat(double **M, struct info_t *info)
 			for(i = 0; i < info->nloc; i++)
 			{
 				for(j = 0; j < n; j++)
-					printf("%.2lf   ", M[i][j]);
-				printf("\n");
+					fprintf(stdout, "%.2lf   ", M[i][j]);
+				fprintf(stdout, "\n");
 			}
 			
 			if(info->rang == info->nproc - 1)
-				printf("\n");
+				fprintf(stdout, "\n");
 		}
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -37,8 +92,8 @@ void affichageMat(double **M, struct info_t *info)
 
 /*
   PROCEDURE : affichageMatSpy
-  DESCRIPTION : permet l'affichage d'une matrice sous forme spy
-  IN : matrice 
+  DESCRIPTION : affichage d'une matrice sous forme spy
+  IN : matrice et structure info_t
   OUT : /
 */
 void affichageMatSpy(double **M, struct info_t *info)
@@ -54,13 +109,13 @@ void affichageMatSpy(double **M, struct info_t *info)
 			{
 				for(j = 0; j < n; j++)
 					if(fabs(M[i][j]) > DBL_EPSILON)
-						fputs("* ", stdout);
-					else fputs("  ", stdout);
-				printf("\n");
+						fprintf(stdout, "* ");
+					else fprintf(stdout, "  ");
+				fprintf(stdout, "\n");
 			}
 			
 			if(info->rang == info->nproc - 1)
-				printf("\n");
+				fprintf(stdout, "\n");
 		}
 	}
 	
@@ -69,26 +124,29 @@ void affichageMatSpy(double **M, struct info_t *info)
 
 /*
   PROCEDURE : affichageVect
-  DESCRIPTION : permet l'affichage d'un vecteur sur la sortie standard
-  IN : vecteur
+  DESCRIPTION : affichage d'un vecteur sur la sortie standard
+  IN : vecteur et structure info_t
   OUT : /
 */
 void affichageVect(double *V, struct info_t *info)
 {
 	int i;
+	double A[n];
+
+	MPI_Gather(V, info->nloc, MPI_DOUBLE, A + info->rang * info->nloc, info->nloc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 	if(info->rang == 0)
 	{
 		for(i = 0; i < n; i++)
-			printf("%.2lf   ", V[i]);
-		printf("\n\n");
+			fprintf(stdout, "%.2lf   ", A[i]);
+		fprintf(stdout, "\n\n");
 	}
 }
 
 /*
   PROCEDURE : poisson2D
   DESCRIPTION : permet de remplir une matrice à l'aide de l'equation de poisson 2D
-  IN : matrice à remplir
+  IN : matrice à remplir et structure info_t
   OUT : matrice 2D A
 */
 void poisson2D(double **A, struct info_t *info)
@@ -136,25 +194,25 @@ int i, v1 = 1, v2 = 0, v3 = nx, v4 = 0;
 /*
   PROCEDURE : ilup
   DESCRIPTION : permet d'effectuer la factorisation LU incomplete au rang p
-  IN : matrice initiale, matrice de niveaux de remplissage et matrice LUi 
-  OUT : matrice LUi sous forme LU incomplet et matrice lev contenant le niveau de remplissage pour chaque element
+  IN : matrice initiale, matrice LUi et structure info_t
+  OUT : matrice LUi sous forme LU incomplete 
 */
 void ilup(double **A, double **LUi, struct info_t *info)
 {
 	int i, j, k;
 	int **level;
 	
-	level = (int**) malloc(n * sizeof(int*));
+	level = (int**) malloc(info->nloc * sizeof(int*));
 	for(i = 0; i < n; i++)
-		level[i] = (int*) malloc(info->nloc * sizeof(int));
+		level[i] = (int*) malloc(n * sizeof(int));
 	
 	// initialisation de la matrice de remplissage 
 	// si A(i,j) != 0
 		// alors lev(i,j) = 0
 		// sinon lev(i,j) = inf
-	for(i = 0; i < n; i++)
+	for(i = 0; i < info->nloc; i++)
 	{
-		for(j = 0; j < info->nloc; j++)
+		for(j = 0; j < n; j++)
 		{
 			if((fabs(A[i][j]) > DBL_EPSILON) || (i == (j+info->rang*info->nloc)))
 				level[i][j] = 0;
@@ -238,7 +296,7 @@ void ilup(double **A, double **LUi, struct info_t *info)
   IN : matrice à factoriser et matrice factorisée 
   OUT : matrice LU --> A = LU
 */
-/*void LUfact(double **A, double **LU)
+void LUfact(double **A, double **LU)
 {
 	int i, j, k;
 	
@@ -258,12 +316,12 @@ void ilup(double **A, double **LUi, struct info_t *info)
 				LU[i][j] = LU[i][j] - (LU[i][k] * LU[k][j]);
 		}
 	}
-}*/
+}
 
 /*
   FONCTION : norme
   DESCRIPTION : permet de calculer la norme d'un vecteur
-  IN : vecteur à calculer
+  IN : vecteur à calculer et structure info_t
   OUT : /
   RETOUR : scalaire contenant la norme du vecteur
 */
@@ -275,27 +333,28 @@ double norme(double *a, struct info_t *info)
 /*
   FONCTION : produitT
   DESCRIPTION : permet d'effectuer le produit d'un vecteur transpose avec une matrice puis avec le vecteur (v' * a * v)
-  IN : vecteur et matrice 
+  IN : vecteur, matrice et structure info_t
   OUT : /
   RETOUR : scalaire contenant le resultat du produit
 */
-/*double produitT(double *v, double **a)
+double produitT(double *v, double **a, struct info_t *info)
 {
 	double *r1, r2 = 0.0;
 	
 	r1 = (double*) calloc(n, sizeof(double));
-	prodMatVect(a, v, r1);
-	r2 = prodScal(r1, v);
+	prodMatVect(a, v, r1, info);
+	r2 = prodScal(r1, v, info);
 	free(r1);
 	
 	return r2;
-}*/
+}
 
 /*
-  PROCEDURE : PCG
+  FONCTION : PCG
   DESCRIPTION : permet d'effectuer le gradient conjugue preconditionne à partir d'une matrice conditionnée (LU incomplete)
-  IN : matrice initiale, vecteur recherche, vecteur resultat, matrice A sous forme ILU et vecteur residu
+  IN : matrice initiale, vecteur recherche, vecteur resultat, matrice A sous forme ILU et structure info_t
   OUT : vecteur resultat x
+  RETOUR : scalaire contenant le nombre d'iteration
 */
 int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 {
@@ -368,7 +427,7 @@ int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 /*
   PROCEDURE : vecteur_b
   DESCRIPTION : permet de construire le vecteur b issu du systeme lineaire Ax = b
-  IN : vecteur à remplir
+  IN : vecteur à remplir et structure info_t
   OUT : vecteur b
 */
 void vecteur_b(double *b, struct info_t *info)
@@ -453,7 +512,7 @@ void matrixMarket(double **A, char *nom)
 /*
   FONCTION : CGR
   DESCRIPTION : permet d'effectuer le gradient conjugue residuel à partir d'une matrice preconditionne
-  IN : matrice initiale, vecteur resultat, vecteur recherche et vecteur residu
+  IN : matrice initiale, vecteur resultat, vecteur recherche et structure info_t
   OUT : vecteur resultat x
   RETOUR : scalaire contenant le nombre d'iteration
 */
@@ -537,6 +596,12 @@ int CGR(double **A, double *x, double *b, struct info_t *info)
 	return iter;
 }
 
+/*
+  PROCEDURE : prodMatVect
+  DESCRIPTION : permet de calculer le produit d'une matrice avec un vecteur
+  IN : matrice, vecteur de calcul, vecteur resultat et structure info_t
+  OUT : vecteur resultat r
+*/
 void prodMatVect(double **m, double *v, double *r, struct info_t *info)
 {
 	int i, j;
@@ -550,6 +615,13 @@ void prodMatVect(double **m, double *v, double *r, struct info_t *info)
 			r[i] += m[i][j] * tmp[j];
 }
 
+/*
+  FONCTION : prodScal
+  DESCRIPTION : permet de calculer le produit scalaire d'un vecteur
+  IN : vecteur 1, vecteur 2 et structure info_t
+  OUT : /
+  RETOUR : scalaire contenant le resultat du produit
+*/
 double prodScal(double *x, double *y, struct info_t *info)
 {
 	int i;
@@ -567,52 +639,58 @@ double prodScal(double *x, double *y, struct info_t *info)
 /*
   FONCTION : CG
   DESCRIPTION : permet d'effectuer le gradient conjugue à partir d'une matrice 
-  IN : matrice initiale, vecteur resultat, vecteur recherche et vecteur residu
+  IN : matrice initiale, vecteur resultat, vecteur recherche, vecteur residu et structure info_t
   OUT : vecteur resultat x
   RETOUR : scalaire contenant le nombre d'iteration
 */
-/*int CG(double **A, double *b, double *x, struct info_t *info)
+int CG(double **A, double *b, double *x, struct info_t *info)
 {
 	int i, j, iter = 0, maxiter = max(100.0, sqrt(n));
 	double alpha, M, Mold, beta;
 	double *v, *r;
 
-	v = (double*) malloc(n * sizeof(double));
-	r = (double*) malloc(n * sizeof(double));
+	v = (double*) malloc(info->nloc * sizeof(double));
+	r = (double*) malloc(info->nloc * sizeof(double));
 
-	for(i = 0; i < n; i++)
+	for(i = 0; i < info->nloc; i++)
 	{
 		r[i] = b[i];
 		v[i] = r[i];
 	}
 
-	M = prodScal(r, r);
+	M = prodScal(r, r, info);
 
-	while(((norme(r) / norme(b)) > DBL_EPSILON) && (iter < maxiter))
+	while(((norme(r, info) / norme(b, info)) > DBL_EPSILON) && (iter < maxiter))
 	{
 		iter++;
-		alpha = M / produitT(v, A);
+		alpha = M / produitT(v, A, info);
 
-		for(i = 0; i < n; i++)
+		for(i = 0; i < info->nloc; i++)
 			x[i] += alpha * v[i];
 
-		prodMatVect(A, v, r);
-		for(i = 0; i < n; i++)
+		prodMatVect(A, v, r, info);
+		for(i = 0; i < info->nloc; i++)
 			r[i] -= alpha * r[i];
 		
 		Mold = M;
-		M = prodScal(r, r);
+		M = prodScal(r, r, info);
 		beta = M / Mold;
 
-		for(i = 0; i < n; i++)
+		for(i = 0; i < info->nloc; i++)
 			v[i] = r[i] + beta * v[i];
 	}
 	
 	free(v);
 	free(r);
 	return iter;
-}*/
+}
 
+/*
+  PROCEDURE : MPI_initialize
+  DESCRIPTION : permet d'initialiser l'environnement MPI
+  IN : nombre d'arguments, vecteur d'arguments et structure info_t
+  OUT : /
+*/
 void MPI_initialize(int argc, char **argv, struct info_t *info)
 {
 	int Q, R;
@@ -621,6 +699,7 @@ void MPI_initialize(int argc, char **argv, struct info_t *info)
 	MPI_Comm_rank(MPI_COMM_WORLD, &(info->rang));
 	MPI_Comm_size(MPI_COMM_WORLD, &(info->nproc));
 
+	info->temps = 0.0;
 	Q = n / info->nproc;
 	R = n % info->nproc;
 
@@ -636,6 +715,13 @@ void MPI_initialize(int argc, char **argv, struct info_t *info)
 	}
 }
 
+/*
+  FONCTION : get_timer
+  DESCRIPTION : permet d'initialiser le timer
+  IN : /
+  OUT : /
+  RETOUR : retourne le temps actuel
+*/
 double get_timer()
 {
 	struct timeval t;
@@ -645,23 +731,40 @@ double get_timer()
 	return t.tv_sec * 1000000 + t.tv_usec;
 }
 
+/*
+  FONCTION : diff_time
+  DESCRIPTION : permet d'effectuer la difference entre le temps de fin et le temps de debut
+  IN : temps de fin et temps de debut
+  OUT : /
+  RETOUR : retourne la difference de temps
+*/
 double diff_time(double end, double start)
 {
 	return end - start;
 }
 
+/*
+  PROCEDURE : print_time
+  DESCRIPTION : permet d'afficher le temps d'execution de chaque processus
+  IN : structure info_t et temps d'execution
+  OUT : /
+*/
 void print_time(struct info_t *info, double runtime)
 {
 	int i;
 	double runtime_in_seconds = runtime / 1000000;
 	double runtime_t[info->nproc];
-	double max = 0.0;
 
 	MPI_Gather(&runtime_in_seconds, 1, MPI_DOUBLE, &runtime_t, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	
+
 	if(info->rang == 0)
 	{
 		for(i = 0; i < info->nproc; i++)
-			fprintf(stderr, "[%d] Temps de l'execution : %e s\n", i, runtime_t[i]);
+		{
+			if(info->temps < runtime_t[i])
+				info->temps = runtime_t[i];
+				
+			fprintf(stdout, "[%d] Temps de l'execution : %e s\n", i, runtime_t[i]);
+		}
 	}
 }

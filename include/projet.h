@@ -17,8 +17,8 @@
 
 #define min(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define max(X, Y) (((X) < (Y)) ? (Y) : (X))
-#define nx 3
-#define ny 2
+#define nx 2
+#define ny 3
 #define n (nx*ny)
 #define p 4
 #define inf 1024
@@ -30,6 +30,7 @@ struct info_t
 	int nloc;
 	int ideb;
 	int ifin;
+	double temps;
 };
 
 ////////////////////////////////////
@@ -44,6 +45,9 @@ void affichageMatSpy(double**, struct info_t *);
 // affichage d'un vecteur
 void affichageVect(double*, struct info_t *); 
 
+// permet d'ecrire dans un fichier de sortie les données du programme
+void ecrireFichier(struct info_t *, int, int, double*);
+
 //////////////////////////////////
 /* *** PROCEDURES DE CALCUL *** */
 //////////////////////////////////
@@ -51,7 +55,7 @@ void affichageVect(double*, struct info_t *);
 double norme(double*, struct info_t *); 
 
 // permet d'effectuer le produit d'un vecteur transpose avec une matrice puis avec le vecteur (v' * a * v)
-double produitT(double*, double**); 
+double produitT(double*, double**, struct info_t *); 
 
 // permet de calculer le produit scalaire d'un vecteur
 double prodScal(double *, double *, struct info_t *);
@@ -62,7 +66,7 @@ void prodMatVect(double **, double *, double *, struct info_t *);
 //////////////////////////////////
 /* *** PROCEDURES DU PROJET *** */
 //////////////////////////////////
-// permet d'effecteur le gradient conjugue preconditionne
+// permet d'effectuer le gradient conjugue preconditionne
 int PCG(double**, double*, double*, double**, struct info_t *); 
 
 // permet de calculer de la factorisation lu incompléte au niveau p
@@ -92,9 +96,19 @@ void matrixMarket(double **, char*);
 ////////////////////////////
 /* *** PROCEDURES MPI *** */
 ////////////////////////////
+// permet d'initialiser l'environnement MPI
 void MPI_initialize(int, char **, struct info_t *);
+
+/////////////////////////////////
+/* *** PROCEDURES DE TEMPS *** */
+/////////////////////////////////
+// permet d'initialiser le timer
 double get_timer();
+
+// permet d'effectuer la difference entre le temps de fin et le temps de debut
 double diff_time(double, double);
+
+// permet d'afficher le temps d'execution de chaque processus
 void print_time(struct info_t *, double );
 
 #endif

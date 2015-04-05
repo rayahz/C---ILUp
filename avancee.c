@@ -1,7 +1,7 @@
 /* ***** LISTE DES FONCTIONS SEQUENTIELLES ***** */
-//void LUfact(double**, double**);
-//int CG(double **, double *, double *, struct info_t *);
-//double produitT(double*, double**);
+void LUfact(double**, double**);
+int CG(double **, double *, double *, struct info_t *);
+double produitT(double*, double**);
 void matrixMarket(double **, char*);
 double get_timer();
 double diff_time(double, double);

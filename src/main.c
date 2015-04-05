@@ -9,7 +9,7 @@
 int main(int argc, char **argv)
 {
 	/* *** DECLARATION DES VARIABLES *** */
-	int i;
+	int i, iterPCG = 0, iterCGR = 0;
 	double **A, *b, **LUi, *x;
 	double runtime, timer_start, timer_end;
 	struct info_t info;
@@ -19,8 +19,8 @@ int main(int argc, char **argv)
 	/* *** INITIALISATION DES VARIABLES *** */
 	A = (double**) malloc(info.nloc * sizeof(double*));
 	LUi = (double**) malloc(info.nloc * sizeof(double*));
-	b = (double*) malloc(n * sizeof(double));
-	x = (double*) calloc(n, sizeof(double));
+	b = (double*) malloc(info.nloc * sizeof(double));
+	x = (double*) calloc(info.nloc, sizeof(double));
 
 	#pragma omp parallel for schedule(static)
 	for(i = 0; i < info.nloc; i++)
@@ -29,43 +29,31 @@ int main(int argc, char **argv)
 		LUi[i] = (double*) malloc(n * sizeof(double));
 	}
 
-	/* *** CORPS DU PROGRAMME PRINCIPAL *** */	
+	/* *** CORPS DU PROGRAMME PRINCIPAL *** */
 	timer_start = get_timer();
 	
-	//printf("Matrice A:\n");
 	poisson2D(A, &info);
 	//affichageMat(A, &info);
 	//affichageMatSpy(A, &info);
 	
-	//printf("Vecteur b:\n");
 	vecteur_b(b, &info);
 	//affichageVect(b, &info);
-
-	prodMatVect(A, b, x, &info);
-	//printf("vecteur x:\n");
-	affichageVect(x, &info);
-
-	//printf("Matrice LUi\n");
+	
 	//ilup(A, LUi, &info);
 	//affichageMat(LUi, &info);
 	//affichageMatSpy(LUi,&info);
 	
-	//printf("Ax = b (PCG)\n");
-	//PCG(A, x, b, LUi, &info);
-	//affichageVect(x);
-
-	//printf("Vecteur residu issu du PCG\n");
-	//affichageVect(residu);
+	//iterPCG = PCG(A, x, b, LUi, &info);
+	//iterCGR = CGR(LUi, x, b, &info);
 	
-	//printf("CGR\n");
-	//CGR(LUi, x, b, &info);
-	
-	//printf("x \n");
+	prodMatVect(A, b, x, &info);
 	//affichageVect(x, &info);
 	
 	timer_end = get_timer();
 	runtime = diff_time(timer_end, timer_start);
 	print_time(&info, runtime);
+	
+	ecrireFichier(&info, iterPCG, iterCGR, x);
 
 	/* *** LIBERATION DES RESSOURCES *** */
 	free(A);
