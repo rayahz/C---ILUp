@@ -34,14 +34,8 @@ void ecrireFichier(struct info_t *info, int x, int y, double *V)
 		fprintf(fichier, "ny = %d\n", ny);
 		fprintf(fichier, "n = nx * ny = %d \n", n);
 		fprintf(fichier, "p = %d\n\n", p);
-		
-		#pragma omp parallel
-		{
-			nbthread++;
-		}
 
 		fprintf(fichier, "Nombre de processus MPI : %d\n", info->nproc);
-		fprintf(fichier, "Nombre de thread : %d\n", nbthread);
 		fprintf(fichier, "Temps d'execution totale : %e\n\n", info->temps);
 		
 		fprintf(fichier, "Nombre d'iteration PCG : %d\n", x);
@@ -166,27 +160,22 @@ int i, v1 = 1, v2 = 0, v3 = nx, v4 = 0;
 	}
 
 	// superdiagonale inférieure
-	#pragma omp parallel for schedule(static)
 	for(i = nx - v3; i < info->nloc; i++)
 		A[i][i + info->ideb - nx] = -1.0;
 
 	// diagonale inférieure
-	#pragma omp parallel for schedule(static)
 	for(i = 1 - v1; i < info->nloc; i++)
 		A[i][i + info->ideb - 1] = -1.0;
 
 	// diagonale principale
-	#pragma omp parallel for schedule(static)
 	for(i = 0; i < info->nloc; i++)
 		A[i][i + info->ideb] = 4.0;
 
 	// diagonale supérieure
-	#pragma omp parallel for schedule(static)
 	for(i = 0; i < info->nloc - v2; i++)
 		A[i][i + info->ideb + 1] = -1.0;
 
 	// superdiagonale supérieure
-	#pragma omp parallel for schedule(static)
 	for(i = 0; i < info->nloc - v4; i++)
 		A[i][i + info->ideb + nx] = -1.0;
 }
@@ -199,95 +188,112 @@ int i, v1 = 1, v2 = 0, v3 = nx, v4 = 0;
 */
 void ilup(double **A, double **LUi, struct info_t *info)
 {
-	int i, j, k;
+	int i, j, k, v0 = 0, pr, tag = 100, Q, R, n_p, ideb_p;
 	int **level;
+	double **LUi_temp;
 	
-	level = (int**) malloc(info->nloc * sizeof(int*));
-	for(i = 0; i < n; i++)
-		level[i] = (int*) malloc(n * sizeof(int));
-	
-	// initialisation de la matrice de remplissage 
-	// si A(i,j) != 0
-		// alors lev(i,j) = 0
-		// sinon lev(i,j) = inf
-	for(i = 0; i < info->nloc; i++)
-	{
-		for(j = 0; j < n; j++)
-		{
-			if((fabs(A[i][j]) > DBL_EPSILON) || (i == (j+info->rang*info->nloc)))
-				level[i][j] = 0;
-			else level[i][j] = inf;
-
-			// copie de la matrice A dans la matrice LUi
-			LUi[i][j] = A[i][j]; 
-		}
-	}
-	
-	int deb = info->ideb;
 	if(info->rang==0)
-		deb++;
-		
-	for(i = deb; i < info->ifin; i++)
 	{
-		for(k = 0; k <= i-1; k++)
+		level = (int**) malloc(n * sizeof(int*));
+		LUi_temp = (double**) malloc(n * sizeof(double*));
+		
+		for(i = 0; i < n; i++)
 		{
-			if(level[i][k-info->nloc*info->rang] <= p)
+			level[i] = (int*) malloc(n * sizeof(int));
+			LUi_temp[i] = (double*) malloc(n * sizeof(double));
+		}
+
+		for(i = 0; i < info->nloc; i++)
+		{
+			for(j = 0; j < n; j++)
+				LUi_temp[i][j] = A[i][j];
+		}
+		
+		Q = n / info->nproc;
+		R = n % info->nproc;
+		
+		for(pr = 1; pr < info->nproc; pr++)
+		{
+			if(pr < R)
 			{
-				LUi[i][k-info->nloc*info->rang] /= LUi[k][k-info->nloc*info->rang]; // calcul
+				n_p = Q + 1;
+				ideb_p = pr * (Q + 1);
+			}else{
+				n_p = Q;
+				ideb_p = R * (Q + 1) + (pr - R) * Q;
+			}
 			
-				for(j = k +1; j < info->nloc; j++)	
-				{
-					LUi[i][j] -= LUi[i][k] * LUi[k][j]; // calcul
-					
-					// remplissage de la matrice de niveau de remplissage
-						// factorisation symbolique : Le but de cette étape est de calculer la structure de remplissage des facteurs avant l’étape de factorisation numérique.
-					if(fabs(LUi[i][j]) > DBL_EPSILON)
-						level[i][j] = min(level[i][j], level[i][k] + level[k][j] + 1);
-				}
+			for(i = 0; i < n_p; i++)
+				MPI_Recv(LUi_temp[i + ideb_p], n, MPI_DOUBLE, pr, tag + i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		}
+
+		for(i = 0; i < n; i++)
+		{
+			for(j = 0; j < n; j++)
+			{
+				if((fabs(LUi_temp[i][j]) > DBL_EPSILON) || (i == (j+info->rang*info->nloc)))
+					level[i][j] = 0;
+				else level[i][j] = inf;
 			}
 		}
 		
-		// tous les elements dont le niveau de remplissage est superieur à p sont remplaces par 0
-		for(j = 0 ; j < info->nloc; j++)
+		for(i = 1; i < n; i++)
 		{
-			if(level[i][j] > p)
-				LUi[i][j] = 0.0;
-		}
-	}
-	
-	/*for(k = 0; k < info->nloc; k++)
-	{
-		for(i = k+1; i < n; i++)
-		{
-			if(level[i][k] <= p)
-				LUi[i][k] = LUi[i][k] / LUi[k+info->nloc*info->rang][k];
-		}
-
-		for(j = k + 1; j < info->nloc; j++)
-		{
-			for(i = k +1 ; i < n; i++)
+			for(k = 0; k < i; k++)
 			{
 				if(level[i][k] <= p)
 				{
-					LUi[i][j] -= LUi[i][k] * LUi[k][j]; 
-
-					if(fabs(LUi[i][j]) > DBL_EPSILON)
-						level[i][j] = min(level[i][j], level[i][k] + level[k][j] + 1);
+					LUi_temp[i][k] /= LUi_temp[k][k];
+					
+					for(j = k +1; j < n; j++)
+					{
+						LUi_temp[i][j] -= LUi_temp[i][k] * LUi_temp[k][j];
+						if(fabs(LUi_temp[i][j]) > DBL_EPSILON) 
+							level[i][j] = min(level[i][j], level[i][k] + level[k][j] + 1);
+					}
 				}
 			}
+			
+			for(j = 0 ; j < n; j++)
+				if(level[i][j] > p) LUi_temp[i][j] = 0.0;
 		}
-	}
-	
-	for(j = 0 ; j < info->nloc; j++)
-	{
-		for(i = 0 ; i < n; i++) 
+
+		// rediviser la matrice LUi_temp
+		for(i = 0; i < info->nloc; i++)
 		{
-			if(level[i][j] > p)
-				LUi[i][j] = 0.0;
+			for(j = 0; j < n; j++)
+				LUi[i][j] = LUi_temp[i][j];
 		}
-	}*/
+
+		for(pr = 1; pr < info->nproc; pr++)
+		{
+			if(pr < R)
+			{
+				n_p = Q + 1;
+				ideb_p = pr * (Q + 1);
+			}else{
+				n_p = Q;
+				ideb_p = R * (Q + 1) + (pr - R) * Q;
+			}
+			
+			for(i = 0; i < n_p; i++)
+				MPI_Send(LUi_temp[i + ideb_p], n, MPI_DOUBLE, pr, tag + i, MPI_COMM_WORLD);
+		}
+	}else{
+		for(i = 0; i < info->nloc; i++)
+			MPI_Send(A[i], n, MPI_DOUBLE, 0, tag+i, MPI_COMM_WORLD);
+
+		for(i = 0; i < info->nloc; i++)
+			MPI_Recv(LUi[i], n, MPI_DOUBLE, 0, tag + i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
 	
-	free(level);
+	if(info->rang == 0)
+	{
+		free(LUi_temp);
+		free(level);
+	}
 }
 
 /*
@@ -341,9 +347,9 @@ double produitT(double *v, double **a, struct info_t *info)
 {
 	double *r1, r2 = 0.0;
 	
-	r1 = (double*) calloc(n, sizeof(double));
+	r1 = (double*) calloc(info->nloc, sizeof(double));
 	prodMatVect(a, v, r1, info);
-	r2 = prodScal(r1, v, info);
+	r2 = prodScal(v, r1, info);
 	free(r1);
 	
 	return r2;
@@ -367,44 +373,33 @@ int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 	r = (double*) malloc(info->nloc * sizeof(double));
 	v = (double*) calloc(info->nloc, sizeof(double));
 
-	#pragma omp parallel for schedule(static)
 	for(i = 0; i < info->nloc; i++)
 		r[i] = b[i];
 
 	prodMatVect(B, r, v, info);
 	M = prodScal(r, v, info);
-
+	
 	if(bnrm2 == 0.0) 
 		bnrm2 = 1.0;
 
 	while(((norme(r, info) / bnrm2) > DBL_EPSILON) && (iterG < maxiter))
 	{
-		// A VIRER QUAND CA MARCHE, DE ICI
-		iterL++;
-		if(info->rang == 0)
-			iterG = iterL;
-		MPI_Bcast(&iterG, 1, MPI_INT, 0, MPI_COMM_WORLD);
-		if(info->rang != 0 && iterG != iterL)
-			MPI_Abort(MPI_COMM_WORLD, 1);
-		// A DE LA
-		
-		#pragma omp parallel for schedule(static)
+		iterG++;
+
 		for(i = 0; i < info->nloc; i++)
 			Ap[i] = 0.0;
 			
 		prodMatVect(A, v, Ap, info);
 		alpha = M / prodScal(v, Ap, info);
 
-		#pragma omp parallel for schedule(static)
 		for(i = 0; i < info->nloc; i++)
 		{
 			x[i] += alpha * v[i];
 			r[i] -= alpha * Ap[i];
 		}
-
+affichageVect(Ap, info);
 		Mold = M;
 
-		#pragma omp parallel for schedule(static)
 		for(i = 0; i < info->nloc; i++)
 			Br[i] = 0.0;
 			
@@ -412,11 +407,10 @@ int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 		M = prodScal(r, Br, info);
 		beta = M / Mold;
 
-		#pragma omp parallel for schedule(static)
 		for(i = 0; i < info->nloc; i++)
 			v[i] = Br[i] + beta * v[i];
 	}
-	
+
 	free(Ap);
 	free(Br);
 	free(r);
@@ -434,7 +428,6 @@ void vecteur_b(double *b, struct info_t *info)
 {
 	int i, j;
 
-	#pragma omp parallel for schedule(static)
 	for(i = 0; (i < info->nloc) && ((i + info->ideb) < n / 2); i++)
 		b[i] = (double)(info->ideb + i);
 
@@ -446,11 +439,9 @@ void vecteur_b(double *b, struct info_t *info)
 				j = n / 2 - 1;
 			else j = n / 2;
 			
-			#pragma omp parallel for schedule(static)
 			for(i = info->nloc / 2; i < info->nloc; i++, j--)
 				b[i] = (double)j;
 		}else{
-			#pragma omp parallel for schedule(static)
 			for(i = 0, j = n - info->ideb - 1; i < info->nloc; i++, j--)
 				b[i] = (double)j;
 		}
@@ -533,7 +524,6 @@ int CGR(double **A, double *x, double *b, struct info_t *info)
 
 	prodMatVect(A, x, r, info);
 	
-	#pragma omp parallel for schedule(static)
 	for(i = 0; i < info->nloc; i++)
 	{
 		r[i] = b[i] - r[i];
@@ -547,21 +537,18 @@ int CGR(double **A, double *x, double *b, struct info_t *info)
 	{
 		iter++;
 
-		#pragma omp parallel for schedule(static)
 		for(i = 0; i < info->nloc; i++)
 			Ap[i] = 0.0;
 			
 		prodMatVect(A, v[iter-1], Ap, info);
 		alpha = prodScal(r, Ap, info) / prodScal(Ap, Ap, info);
 		
-		#pragma omp parallel for schedule(static)
 		for(i = 0; i < info->nloc; i++)
 		{
 			x[i] += alpha * v[iter - 1][i];
 			r[i] -= alpha * Ap[i];
 		}
 		
-		#pragma omp parallel for schedule(static)
 		for(k = 0; k < iter; k++)
 		{
 			for(i = 0; i < info->nloc; i++)
@@ -575,14 +562,12 @@ int CGR(double **A, double *x, double *b, struct info_t *info)
 			beta[k] = - prodScal(Ar, Ap, info) / prodScal(Ap, Ap, info);
 		}
 		
-		#pragma omp parallel for schedule(static)
 		for(k = 0; k < iter; k++)
 		{
 			for(i = 0; i < n; i++)
 				v[iter][i] += beta[k] * v[k][i];
 		}
 		
-		#pragma omp parallel for schedule(static)
 		for(i = 0; i < info->nloc; i++)
 			v[iter][i] += r[i];
 	}
@@ -609,7 +594,6 @@ void prodMatVect(double **m, double *v, double *r, struct info_t *info)
 
 	MPI_Allgather(v, info->nloc, MPI_DOUBLE, tmp, info->nloc, MPI_DOUBLE, MPI_COMM_WORLD);
 
-	#pragma omp parallel for schedule(static) private(j, r)
 	for(i = 0; i < info->nloc; i++)
 		for(j = 0; j < n; j++)
 			r[i] += m[i][j] * tmp[j];
@@ -627,11 +611,10 @@ double prodScal(double *x, double *y, struct info_t *info)
 	int i;
 	double res_loc = 0.0, res_glob;
 
-	#pragma omp parallel for schedule(static) reduction(+:res_loc)
 	for(i = 0; i < info->nloc; i++)
 		res_loc += x[i] * y[i];
 
-	MPI_Reduce(&res_loc, &res_glob, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+	MPI_Allreduce(&res_loc, &res_glob, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 	
 	return res_glob;
 }
@@ -646,42 +629,50 @@ double prodScal(double *x, double *y, struct info_t *info)
 int CG(double **A, double *b, double *x, struct info_t *info)
 {
 	int i, j, iter = 0, maxiter = max(100.0, sqrt(n));
-	double alpha, M, Mold, beta;
-	double *v, *r;
+	double alpha, M, Mold, beta, bnrm2 = norme(b, info), r2 = 0.0;
+	double *v, *r, *r1;
 
 	v = (double*) malloc(info->nloc * sizeof(double));
 	r = (double*) malloc(info->nloc * sizeof(double));
-
+	r1 = (double*) malloc(info->nloc * sizeof(double));
+	
+	if(bnrm2 == 0.0) 
+		bnrm2 = 1.0;
+		
+	prodMatVect(A, x, r, info);
 	for(i = 0; i < info->nloc; i++)
 	{
-		r[i] = b[i];
+		r[i] = b[i] - r[i];
 		v[i] = r[i];
 	}
 
-	M = prodScal(r, r, info);
+	
 
-	while(((norme(r, info) / norme(b, info)) > DBL_EPSILON) && (iter < maxiter))
+	while(((norme(r, info) / bnrm2) > DBL_EPSILON) && (iter < maxiter))
 	{
 		iter++;
-		alpha = M / produitT(v, A, info);
-
+		M = prodScal(r, r, info);
+		prodMatVect(A, v, r1, info);
+		r2 = prodScal(r1, v, info);
+		alpha = M / r2;
+		
 		for(i = 0; i < info->nloc; i++)
 			x[i] += alpha * v[i];
 
-		prodMatVect(A, v, r, info);
 		for(i = 0; i < info->nloc; i++)
-			r[i] -= alpha * r[i];
+			r[i] -= alpha * r1[i];
 		
 		Mold = M;
 		M = prodScal(r, r, info);
 		beta = M / Mold;
-
+		
 		for(i = 0; i < info->nloc; i++)
 			v[i] = r[i] + beta * v[i];
 	}
 	
 	free(v);
 	free(r);
+	free(r1);
 	return iter;
 }
 

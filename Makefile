@@ -16,7 +16,7 @@ BIN_DIR=./bin/
 all: $(TARGET)
 
 $(TARGET): $(OBJ_FILES)
-	$(MPI) $(LDFLAGS) -o $(BIN_DIR)$(TARGET) $(OBJ_FILES) $(LFLAGS) -Wall -fopenmp
+	$(MPI) $(LDFLAGS) -o $(BIN_DIR)$(TARGET) $(OBJ_FILES) $(LFLAGS) -Wall 
 
 $(OBJ_DIR)%.o: $(SRC_DIR)%.c
 	$(MPI) $(CFLAGS) -c -o $@ $^ 
