@@ -16,12 +16,12 @@ void ecrireFichier(struct info_t *info, int x, int y, double *V)
 {
 	FILE* fichier = NULL;
 	char buffer1[256], buffer2[256];
-	int nbthread = omp_get_num_threads(), i;
+	int i;
 	double A[n];
 	
 	time_t timestamp = time(NULL);
 	strftime(buffer1, sizeof(buffer1), "%A %d %B %Y - %X", localtime(&timestamp));
-	strftime(buffer2, sizeof(buffer2), "%d%m%Y_%H%M%S.txt", localtime(&timestamp));
+	strftime(buffer2, sizeof(buffer2), "./log/%d%m%Y_%H%M%S.txt", localtime(&timestamp));
 	
 	fichier = fopen(buffer2, "w");
 
@@ -397,7 +397,7 @@ int PCG(double **A, double *x, double *b, double **B, struct info_t *info)
 			x[i] += alpha * v[i];
 			r[i] -= alpha * Ap[i];
 		}
-affichageVect(Ap, info);
+
 		Mold = M;
 
 		for(i = 0; i < info->nloc; i++)
@@ -645,8 +645,6 @@ int CG(double **A, double *b, double *x, struct info_t *info)
 		r[i] = b[i] - r[i];
 		v[i] = r[i];
 	}
-
-	
 
 	while(((norme(r, info) / bnrm2) > DBL_EPSILON) && (iter < maxiter))
 	{
